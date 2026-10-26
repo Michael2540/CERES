@@ -23,6 +23,7 @@ All third-party libraries, data, and assets used are listed below with their lic
 |---|---|
 | 2026-10-26 | Created the public repository; added README, LICENSE, and hackathon info. |
 | 2026-10-26 | Installed Meta Muse Code CLI (v1.4.13); added MUSE_CODE.md usage guide and CLAUDE.md. |
+| 2026-10-26 | Ran `muse init` to generate AGENTS.md (Muse Code project rules). |
 
 ## Submission Checklist
 
