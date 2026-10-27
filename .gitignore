@@ -36,3 +36,4 @@ web/public/fixtures
 # Regenerable artefacts
 data/derived/
 .sam_cache/
+.index.json
