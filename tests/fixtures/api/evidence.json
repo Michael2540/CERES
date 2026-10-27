@@ -1,0 +1,8 @@
+{
+ "B:soil_vwc:2016-01-03T10:00:00Z": {"id": "B:soil_vwc:2016-01-03T10:00:00Z", "kind": "reading", "tray_id": "B", "ts": "2016-01-03T10:00:00Z", "metric": "soil_vwc", "value": 0.11, "source": "simulated"},
+ "B:area_cm2:2016-01-03T10:00:00Z": {"id": "B:area_cm2:2016-01-03T10:00:00Z", "kind": "metric", "tray_id": "B", "ts": "2016-01-03T10:00:00Z", "frame_id": "B_20160103T100000", "metric": "area_cm2", "value": 612.0, "source": "derived"},
+ "A:area_cm2:2016-01-03T10:00:00Z": {"id": "A:area_cm2:2016-01-03T10:00:00Z", "kind": "metric", "tray_id": "A", "ts": "2016-01-03T10:00:00Z", "frame_id": "A_20160103T100000", "metric": "area_cm2", "value": 757.0, "source": "derived"},
+ "B:chlorosis_frac:2016-01-03T10:00:00Z": {"id": "B:chlorosis_frac:2016-01-03T10:00:00Z", "kind": "metric", "tray_id": "B", "ts": "2016-01-03T10:00:00Z", "frame_id": "B_20160103T100000", "metric": "chlorosis_frac", "value": 0.22, "source": "derived"},
+ "B_20160103T100000": {"id": "B_20160103T100000", "kind": "frame", "tray_id": "B", "ts": "2016-01-03T10:00:00Z", "frame_id": "B_20160103T100000", "source": "fault_transform"},
+ "alert_B_GROWTH_LAG_20160103T100000Z": {"id": "alert_B_GROWTH_LAG_20160103T100000Z", "kind": "alert", "tray_id": "B", "ts": "2016-01-03T10:00:00Z"}
+}

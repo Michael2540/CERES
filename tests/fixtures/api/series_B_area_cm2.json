@@ -1,0 +1,5 @@
+{"tray_id": "B", "metric": "area_cm2", "unit": "cm2 (nominal)", "items": [
+  {"id": "B:area_cm2:2016-01-02T10:00:00Z", "ts": "2016-01-02T10:00:00Z", "value": 655.0, "source": "derived"},
+  {"id": "B:area_cm2:2016-01-03T08:00:00Z", "ts": "2016-01-03T08:00:00Z", "value": 622.0, "source": "derived"},
+  {"id": "B:area_cm2:2016-01-03T10:00:00Z", "ts": "2016-01-03T10:00:00Z", "value": 612.0, "source": "derived"}
+]}

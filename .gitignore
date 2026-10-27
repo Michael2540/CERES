@@ -17,3 +17,18 @@ venv/
 Thumbs.db
 .vscode/
 .idea/
+
+# CERES
+data/raw/
+data/*.db
+backend/eval/out/*.json
+!backend/eval/out/.gitkeep
+web/.next
+web/node_modules
+.pytest_cache
+.ruff_cache
+playwright-report
+test-results
+.sam_cache/
+web/public/fixtures
+*.egg-info/

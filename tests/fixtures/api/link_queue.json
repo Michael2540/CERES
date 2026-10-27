@@ -1,0 +1,6 @@
+{"items": [
+  {"id": "lq_B_20160103T100200Z", "ts": "2016-01-03T10:02:00Z", "kind": "alert_triage", "status": "audited",
+   "edge": {"tray_id": "B", "urgency": "now", "likely_cause": "underwatering", "evidence_ids": ["B:soil_vwc:2016-01-03T10:00:00Z"],
+            "crew_instruction": "Check substrate moisture in tray B and water if dry.", "handoff_note_for_earth": "B shrinking vs control A; soil moisture low."},
+   "audit": {"agree": true, "urgency_delta": 0, "cause_match": true, "notes": "Earth-side assessment concurs with the edge triage."}}
+]}

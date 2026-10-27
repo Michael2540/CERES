@@ -1,0 +1,5 @@
+{"tray_id": "B", "metric": "soil_vwc", "unit": "m3/m3", "items": [
+  {"id": "B:soil_vwc:2016-01-03T06:00:00Z", "ts": "2016-01-03T06:00:00Z", "value": 0.14, "source": "simulated"},
+  {"id": "B:soil_vwc:2016-01-03T08:00:00Z", "ts": "2016-01-03T08:00:00Z", "value": 0.125, "source": "simulated"},
+  {"id": "B:soil_vwc:2016-01-03T10:00:00Z", "ts": "2016-01-03T10:00:00Z", "value": 0.11, "source": "simulated"}
+]}

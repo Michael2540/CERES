@@ -1,0 +1,5 @@
+{"items": [
+  {"id": "alert_B_GROWTH_LAG_20160103T100000Z", "ts": "2016-01-03T10:00:00Z", "tray_id": "B", "rule": "GROWTH_LAG", "severity": "alert",
+   "evidence_ids": ["B:area_cm2:2016-01-03T10:00:00Z", "A:area_cm2:2016-01-03T10:00:00Z"],
+   "threshold_tag": "author:control-relative", "assessment_id": null}
+]}

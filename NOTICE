@@ -1,0 +1,16 @@
+CERES
+Built for the Meta Global AI Developer Hackathon.
+
+Third-party data
+----------------
+Aberystwyth Leaf Evaluation Dataset (ALED)
+  Aberystwyth University / National Plant Phenomics Centre
+  Zenodo, doi:10.5281/zenodo.168158
+  Licence: Creative Commons Attribution 4.0 (CC BY 4.0)
+  CERES uses downscaled frames. Faults on trays B and C are simulated transforms of real frames
+  and are labelled as such in the app.
+
+Third-party models and terms
+----------------------------
+SAM License: TODO (add terms for SAM 3.1 as served by the Meta Model API)
+Muse / Meta Model API terms: TODO

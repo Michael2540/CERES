@@ -1,0 +1,1 @@
+"""Simulated sensor hub (PLAN.md 0.2): seeded deterministic diurnal model emitting the 'millis,tray,metric,value' CSV protocol with HOLD/RELEASE/PING commands. Readings carry source=simulated. Implemented in M3."""

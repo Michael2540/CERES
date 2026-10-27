@@ -1,0 +1,5 @@
+{"items": [
+  {"id": "B_20160103T100000", "tray_id": "B", "ts": "2016-01-03T10:00:00Z", "source": "fault_transform", "calib_flag": "nominal", "cm2_per_px": 0.01, "image_url": "/trays/B/frames/B_20160103T100000/image", "overlay_url": "/trays/B/frames/B_20160103T100000/overlay"},
+  {"id": "B_20160103T080000", "tray_id": "B", "ts": "2016-01-03T08:00:00Z", "source": "fault_transform", "calib_flag": "nominal", "cm2_per_px": 0.01, "image_url": "/trays/B/frames/B_20160103T080000/image", "overlay_url": "/trays/B/frames/B_20160103T080000/overlay"},
+  {"id": "B_20160101T100000", "tray_id": "B", "ts": "2016-01-01T10:00:00Z", "source": "dataset", "calib_flag": "nominal", "cm2_per_px": 0.01, "image_url": "/trays/B/frames/B_20160101T100000/image", "overlay_url": "/trays/B/frames/B_20160101T100000/overlay"}
+], "next_cursor": "2016-01-01T10:00:00Z"}

@@ -1,0 +1,4 @@
+{"tray_id": "air", "metric": "rh_pct", "unit": "%", "items": [
+  {"id": "air:rh_pct:2016-01-03T08:00:00Z", "ts": "2016-01-03T08:00:00Z", "value": 57.5, "source": "simulated"},
+  {"id": "air:rh_pct:2016-01-03T10:00:00Z", "ts": "2016-01-03T10:00:00Z", "value": 58.0, "source": "simulated"}
+]}

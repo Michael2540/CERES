@@ -1,0 +1,7 @@
+{"id": "B", "crop": "arabidopsis_thaliana", "treatment": "no_water", "status": "alert",
+ "fault_start": "2016-01-02T00:00:00Z", "reference_tray_id": "A", "age_days": 20, "mission_day": 21,
+ "badge": "SIMULATED FAULT (image transform)", "calib_flag": "nominal",
+ "latest": {"ts": "2016-01-03T10:00:00Z", "frame_id": "B_20160103T100000", "area_px": 61200, "area_cm2": 612.0,
+            "growth_rate": -0.018, "exg": 0.31, "chlorosis_frac": 0.22, "drift_z": null,
+            "soil_vwc": 0.11, "temp_c": 22.4, "rh_pct": 58.0, "vpd_kpa": 1.18},
+ "open_alerts": [{"id": "alert_B_GROWTH_LAG_20160103T100000Z", "rule": "GROWTH_LAG", "severity": "alert"}]}

@@ -1,0 +1,63 @@
+# Tray configuration (PLAN.md 0.3). One entry per tray; loaded by backend/config.py.
+# Dataset: Aberystwyth Leaf Evaluation Dataset (ALED), frames span 2015-12-14 .. 2016-01-18.
+trays:
+  - id: A                              # tray id used everywhere in the API and DB
+    crop: arabidopsis_thaliana         # crop species (model plant of space plant biology)
+    aled_tray: PSI_Tray031             # ALED source tray whose frames this tray replays
+    treatment: control                 # control | no_water | low_light | humid_no_fan
+    fault_start: null                  # ISO UTC when the simulated fault begins; null = no fault
+    reference_tray_id: null            # tray compared against; null = none
+    roi: [65, 15, 905, 740]            # x,y,w,h px in the 1024x768 frame: the PSI tray (20 pots), checked on tray A
+    cm2_per_px: 0.01                   # nominal scale (no ArUco marker in ALED); placeholder
+    calib_flag: nominal                # nominal = configured constant, not measured
+    lamp: {"on": "07:00", "off": "23:00"}  # UTC placeholder; will be aligned to ALED imaging hours
+    ppfd_est: 200                      # estimated PPFD, umol/m2/s
+    soil: {dry_raw: 3000, wet_raw: 1400}  # soil probe raw values at dry / wet calibration (simulated)
+    fault: {}                          # no fault parameters for the control tray
+
+  - id: B
+    crop: arabidopsis_thaliana
+    aled_tray: PSI_Tray032
+    treatment: no_water                # water withheld -> wilting
+    fault_start: "2016-01-02T00:00:00Z"
+    reference_tray_id: A               # compared against control tray A
+    roi: [65, 15, 905, 740]            # same PSI scanner geometry as tray A
+    cm2_per_px: 0.01
+    calib_flag: nominal
+    lamp: {"on": "07:00", "off": "23:00"}  # placeholder, align to ALED imaging hours
+    ppfd_est: 200
+    soil: {dry_raw: 3000, wet_raw: 1400}
+    fault:
+      erode_px_per_day: 2.0            # canopy-mask erosion radius growth per day since fault_start
+      desat_per_day: 0.05              # saturation loss per day (yellowing toward chlorosis band)
+
+  - id: C
+    crop: arabidopsis_thaliana
+    aled_tray: PSI_Tray033
+    treatment: low_light
+    fault_start: "2016-01-01T00:00:00Z"
+    reference_tray_id: A
+    roi: [65, 15, 905, 740]            # same PSI scanner geometry as tray A
+    cm2_per_px: 0.01
+    calib_flag: nominal
+    lamp: {"on": "07:00", "off": "23:00"}  # placeholder, align to ALED imaging hours
+    ppfd_est: 80                       # dimmed lamp after fault_start
+    soil: {dry_raw: 3000, wet_raw: 1400}
+    fault:
+      growth_factor: 0.4               # time-warp: frame at fault_start + (t - fault_start) * 0.4
+      brightness_factor: 0.6           # frame brightness scale (lamp dimming)
+
+  - id: L
+    crop: arabidopsis_thaliana
+    aled_tray: PSI_Tray034
+    treatment: humid_no_fan            # humidity dome, no fan -> low VPD
+    fault_start: "2016-01-04T00:00:00Z"
+    reference_tray_id: null            # compared against its own pre-fault baseline
+    roi: [65, 15, 905, 740]            # same PSI scanner geometry as tray A
+    cm2_per_px: 0.01
+    calib_flag: nominal
+    lamp: {"on": "07:00", "off": "23:00"}  # placeholder, align to ALED imaging hours
+    ppfd_est: 200
+    soil: {dry_raw: 3000, wet_raw: 1400}
+    fault:
+      rh_target_pct: 92                # simulated RH under the dome after fault_start

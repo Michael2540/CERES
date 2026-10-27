@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "backend"
+version = "0.1.0"
+description = "CERES: space-farming crop monitor built on Meta models"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi", "uvicorn", "pydantic>=2", "openai", "opencv-python-headless", "numpy", "scipy",
+  "pyyaml", "jsonschema", "httpx", "python-multipart", "sse-starlette", "pillow", "remotezip",
+  "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "ruff"]
+
+[tool.setuptools.packages.find]
+include = ["backend*"]
+
+[tool.setuptools.package-data]
+backend = ["**/*.yaml", "**/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+extend-exclude = ["web", "data"]

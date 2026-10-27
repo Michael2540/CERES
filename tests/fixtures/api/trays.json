@@ -1,0 +1,6 @@
+{"items": [
+  {"id": "A", "crop": "arabidopsis_thaliana", "treatment": "control", "status": "nominal", "fault_start": null, "reference_tray_id": null, "badge": "DATASET", "open_alerts": 0, "latest_frame_id": "A_20160103T100000"},
+  {"id": "B", "crop": "arabidopsis_thaliana", "treatment": "no_water", "status": "alert", "fault_start": "2016-01-02T00:00:00Z", "reference_tray_id": "A", "badge": "SIMULATED FAULT (image transform)", "open_alerts": 1, "latest_frame_id": "B_20160103T100000"},
+  {"id": "C", "crop": "arabidopsis_thaliana", "treatment": "low_light", "status": "watch", "fault_start": "2016-01-01T00:00:00Z", "reference_tray_id": "A", "badge": "SIMULATED FAULT (time-warp)", "open_alerts": 0, "latest_frame_id": "C_20160103T100000"},
+  {"id": "L", "crop": "arabidopsis_thaliana", "treatment": "humid_no_fan", "status": "nominal", "fault_start": "2016-01-04T00:00:00Z", "reference_tray_id": null, "badge": "SIMULATED (sensors)", "open_alerts": 0, "latest_frame_id": "L_20160103T100000"}
+]}

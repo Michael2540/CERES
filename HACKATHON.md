@@ -15,7 +15,14 @@ All third-party libraries, data, and assets used are listed below with their lic
 
 | Name | License | Usage |
 |---|---|---|
-| _TBD_ | | |
+| Aberystwyth Leaf Evaluation Dataset (ALED), Aberystwyth University / NPPC, Zenodo 10.5281/zenodo.168158 | CC BY 4.0 | Plant time-lapse frames and ground-truth masks (sampled; only a small subset is committed in `data/demo/`) |
+| meta-sam-parser | SAM License | Parses `sam-3.1` segmentation output |
+| FastAPI, Pydantic, PyYAML, jsonschema, remotezip | MIT | Backend API, config, schema validation, dataset range reads |
+| Uvicorn, httpx, NumPy, SciPy, python-dotenv, sse-starlette | BSD-3-Clause | Server, HTTP, numerics, env loading, SSE |
+| OpenAI Python SDK, opencv-python-headless, python-multipart | Apache 2.0 | Meta Model API client (OpenAI-compatible), image ops, uploads |
+| Pillow | MIT-CMU (HPND) | Image I/O |
+| Next.js, React, Tailwind CSS, Recharts | MIT | Dashboard |
+| Playwright | Apache 2.0 | UI smoke tests |
 
 ## Build Log
 
@@ -24,6 +31,10 @@ All third-party libraries, data, and assets used are listed below with their lic
 | 2026-10-26 | Created the public repository; added README, LICENSE, and hackathon info. |
 | 2026-10-26 | Installed Meta Muse Code CLI (v1.4.13); added MUSE_CODE.md usage guide and CLAUDE.md. |
 | 2026-10-26 | Ran `muse init` to generate AGENTS.md (Muse Code project rules). |
+| 2026-10-27 | PLAN.md §0: software-only amendment (ALED dataset replaces camera and trays; simulated sensor hub; labeled simulated faults; $150 Meta budget cap). |
+| 2026-10-27 | **Muse Code** (`muse-spark-1.3-contributor`, 17 calls) wrote `scripts/fetch_dataset.py` + tests (ALED range-request sampler). Muse Code also did a read-only review of M0. |
+| 2026-10-27 | Spikes S1 (`sam-3.1`: 20/20 plants segmented on a real tray) and S2 (`muse-spark-1.3` tool calls, strict JSON schema, 6-image messages). Results in SPIKES.md. |
+| 2026-10-27 | M0 scaffold: package layout, SQLite schema with spend ledger, API.md + fixtures, Next.js shell, CI. |
 
 ## Submission Checklist
 
