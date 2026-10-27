@@ -8,7 +8,7 @@ def test_trays():
     assert cfg.by_id("C").reference_tray_id == "A"
     assert cfg.by_id("L").reference_tray_id is None
     assert cfg.by_id("A").fault_start is None
-    assert cfg.by_id("B").fault.erode_px_per_day and cfg.by_id("B").fault.desat_per_day
+    assert cfg.by_id("B").fault.shrink_per_day and cfg.by_id("B").fault.desat_per_day
     assert cfg.by_id("C").fault.growth_factor == 0.4 and cfg.by_id("C").fault.brightness_factor == 0.6
     assert cfg.by_id("L").fault.rh_target_pct == 92
     assert all(t.crop == "arabidopsis_thaliana" for t in cfg.trays)

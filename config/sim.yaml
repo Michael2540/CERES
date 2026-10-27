@@ -1,0 +1,7 @@
+# Simulated sensor hub settings (PLAN.md 0.2). Read by backend/sim/sensor_hub.py load_sim_config().
+seed: 0            # RNG seed; same seed -> identical stream
+step_s: 300        # seconds between sample sets
+injections:        # hub commands applied at simulated times (SENSOR_FAULT story: 60 min RH flatline)
+  - at: "2016-01-10T14:00:00Z"
+    command: "HOLD air:rh_pct"
+    duration_min: 60

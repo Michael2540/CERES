@@ -57,8 +57,9 @@ class SoilCalibration(BaseModel):
 
 
 class FaultParams(BaseModel):
-    erode_px_per_day: float | None = None  # tray B
-    desat_per_day: float | None = None  # tray B
+    shrink_per_day: float | None = None  # tray B: rosette scale loss per day, s(d) = max(s_min, 1 - shrink*d)
+    s_min: float | None = None  # tray B: smallest rosette scale
+    desat_per_day: float | None = None  # tray B: colour dulling per day
     growth_factor: float | None = None  # tray C
     brightness_factor: float | None = None  # tray C
     rh_target_pct: float | None = None  # tray L

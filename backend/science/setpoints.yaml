@@ -1,0 +1,38 @@
+# Science layer (PLAN.md 7). Every row has a value, a confidence and a source tag; alerts display the
+# tag of the threshold they used. Lettuce rows are context only (applies_to: lettuce) and are NOT used
+# by the rules: the crop is Arabidopsis thaliana (PLAN 0.3), for which no sourced setpoints exist, so
+# its rows are control-relative (the control tray A is the reference).
+setpoints:
+  - {id: ppfd_lettuce, variable: PPFD, applies_to: lettuce, value: "200-400 umol m-2 s-1", confidence: low, source: "[G3d5] (snippet) [G3d7] (low) [G2c7] (fixed experimental condition, not an optimum)", tag: author-interpretation}
+  - {id: vpd_lettuce, variable: VPD, applies_to: lettuce, value: "~0.8 kPa optimal, 1.4 kPa sub-optimal (one study; a 0.8-1.2 band is NOT confirmed)", confidence: low-medium, source: "[G3d6] [E15]", tag: author-interpretation}
+  - {id: co2_lettuce, variable: CO2, applies_to: lettuce, value: "1000-1500 ppm maximizes growth; ~850 ppm reduces tipburn", confidence: medium, source: "[E15]", tag: "[E15]"}
+  - {id: temp_air, variable: air temperature, applies_to: lettuce, value: "~24 C (energy/yield compromise in one model)", confidence: low, source: "[G3d9]", tag: "[G3d9]"}
+  - {id: tipburn_pattern, variable: tipburn-risk pattern, applies_to: lettuce, value: "high light/CO2 + low VPD + poor airflow", confidence: medium, source: "[E15]", tag: "[E15]"}
+  - {id: ec_ph_hydroponic, variable: EC / pH, applies_to: lettuce, value: "EC 1.2-1.6 mS/cm, pH 5.5-6.0 (one study); vendor guide EC 0.8-1.4, pH 5.5-6.5 (they conflict). Hydroponic only; unused with soil trays", confidence: low-medium, source: "[G2c6] vs [G2c5]", tag: "[G2c6]"}
+  - {id: ppfd_arabidopsis, variable: PPFD, applies_to: arabidopsis, value: control-relative, confidence: unsourced, source: control tray A, tag: "author:control-relative"}
+  - {id: vpd_arabidopsis, variable: VPD, applies_to: arabidopsis, value: control-relative (rule floor vpd_low below), confidence: unsourced, source: control tray A, tag: "author:control-relative"}
+  - {id: co2_arabidopsis, variable: CO2, applies_to: arabidopsis, value: control-relative, confidence: unsourced, source: control tray A, tag: "author:control-relative"}
+  - {id: temp_arabidopsis, variable: air temperature, applies_to: arabidopsis, value: control-relative, confidence: unsourced, source: control tray A, tag: "author:control-relative"}
+  - {id: iss_cabin, variable: ISS cabin-like context, applies_to: context, value: "~22 C, 37% RH, ~3000 ppm CO2 (ground-chamber panel; NOT measured ISS values, NOT plant setpoints)", confidence: low, source: "[E18]", tag: "[E18]"}
+
+# Rule thresholds (author-chosen; calibrated on logged data on Day 3).
+thresholds:
+  wilt_soil_frac: {value: 0.6, unit: fraction of baseline median soil_vwc, rule: WILT_RISK, tag: author, confidence: low}
+  wilt_area_drop: {value: 0.08, unit: fraction, rule: WILT_RISK, tag: author, confidence: low}
+  wilt_exg_drop: {value: 0.10, unit: fraction, rule: WILT_RISK, tag: author, confidence: low}
+  wilt_window_h: {value: 6, unit: hours, rule: WILT_RISK, tag: author, confidence: low}
+  vpd_low: {value: 0.4, unit: kPa, rule: LOW_VPD_RISK, tag: "author; pattern [E15]", confidence: low}
+  low_vpd_hours: {value: 6, unit: hours of lamp-on time, rule: LOW_VPD_RISK, tag: "author; pattern [E15]", confidence: low}
+  flatline_min: {value: 30, unit: minutes, rule: SENSOR_FAULT, tag: author, confidence: medium}
+  fault_lookback_min: {value: 60, unit: minutes a flatline/gap/range fault stays reported after it ends, rule: SENSOR_FAULT, tag: author, confidence: medium}
+  gap_min: {value: 15, unit: minutes, rule: SENSOR_FAULT, tag: author, confidence: medium}
+  growth_lag_frac: {value: 0.5, unit: fraction of reference growth rate, rule: GROWTH_LAG, tag: "author:control-relative", confidence: low}
+  growth_window_h: {value: 24, unit: hours, rule: GROWTH_LAG, tag: "author:control-relative", confidence: low}
+
+# Physical limits per metric: a reading outside is a sensor fault.
+physical_limits:
+  temp_c: {min: -10, max: 60, tag: physical}
+  rh_pct: {min: 0, max: 100, tag: physical}
+  co2_ppm: {min: 250, max: 10000, tag: physical}
+  soil_raw: {min: 50, max: 4050, tag: physical}  # excludes the ADC rails (pulled or shorted probe)
+  soil_vwc: {min: -0.1, max: 1.0, tag: physical}

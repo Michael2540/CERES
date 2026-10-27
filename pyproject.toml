@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "CERES: space-farming crop monitor built on Meta models"
 requires-python = ">=3.11"
 dependencies = [
-  "fastapi", "uvicorn", "pydantic>=2", "openai", "opencv-python-headless", "numpy", "scipy",
+  "fastapi", "uvicorn", "meta-sam-parser", "certifi", "pydantic>=2", "openai", "opencv-python-headless", "numpy", "scipy",
   "pyyaml", "jsonschema", "httpx", "python-multipart", "sse-starlette", "pillow", "remotezip",
   "python-dotenv",
 ]

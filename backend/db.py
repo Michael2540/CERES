@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS trays(
 );
 CREATE TABLE IF NOT EXISTS frames(
   id TEXT PRIMARY KEY, tray_id TEXT, ts TEXT, path TEXT, cm2_per_px REAL, calib_flag TEXT,
-  source TEXT  -- dataset | fault_transform | fault_timewarp
+  source TEXT,  -- dataset | fault_transform | fault_timewarp
+  fault_hash TEXT NULL  -- hash of (fault params, fault_start, FAULTS_VERSION) for derived frames
 );
 CREATE TABLE IF NOT EXISTS plants(
   id TEXT PRIMARY KEY, tray_id TEXT, first_seen_ts TEXT, label TEXT
@@ -67,5 +68,8 @@ def init_db(path: str | Path) -> sqlite3.Connection:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
     conn = connect(path)
     conn.executescript(SCHEMA)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(frames)")}
+    if "fault_hash" not in cols:  # database created before the column existed
+        conn.execute("ALTER TABLE frames ADD COLUMN fault_hash TEXT NULL")
     conn.commit()
     return conn
