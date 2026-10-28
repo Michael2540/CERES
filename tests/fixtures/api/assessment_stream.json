@@ -8,6 +8,6 @@
  {"event": "tool_call", "data": {"round": 3, "tool": "get_sensor_series", "args": {"tray_id": "B", "metric": "soil_vwc", "hours": 24}}},
  {"event": "tool_result", "data": {"round": 3, "tool": "get_sensor_series", "ids": ["B:soil_vwc:2016-01-03T10:00:00Z"]}},
  {"event": "tool_call", "data": {"round": 3, "tool": "get_frames", "args": {"tray_id": "B", "timestamps": ["2016-01-03T10:00:00Z"]}}},
- {"event": "tool_result", "data": {"round": 3, "tool": "get_frames", "ids": ["B_20160103T100000"]}},
+ {"event": "tool_result", "data": {"round": 3, "tool": "get_frames", "ids": ["B:2016-01-03T10:00:00Z"]}},
  {"event": "assessment", "data": {"assessment_id": "asmt_B_20160103T100000Z", "valid": true, "latency_ms": 41200, "recorded": false}}
 ]

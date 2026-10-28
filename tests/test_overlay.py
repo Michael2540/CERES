@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 from fastapi.testclient import TestClient
 
-from backend.api import frames
+from backend.api import deps
 from backend.app import app
 from backend.config import ROOT
 from backend.db import connect, init_db
@@ -20,24 +20,24 @@ def test_overlay_and_image(tmp_path, monkeypatch):
     cv2.imwrite(str(p), img)
     try:
         conn.execute(
-            "INSERT INTO frames(id, tray_id, ts, path, cm2_per_px, calib_flag, source) VALUES ('A:t1','A','t1',?,0.01,'nominal','dataset')",
+            "INSERT INTO frames(id, tray_id, ts, path, cm2_per_px, calib_flag, source) VALUES ('A:2016-01-03T01:00:00Z','A','2016-01-03T01:00:00Z',?,0.01,'nominal','dataset')",
             ("data/derived/_test_overlay.jpg",),
         )
         m = np.zeros((60, 80), bool)
         m[10:30, 10:40] = True
         conn.execute(
-            "INSERT INTO masks(id, frame_id, tray_id, kind, rle) VALUES ('m1','A:t1','A','canopy',?)",
+            "INSERT INTO masks(id, frame_id, tray_id, kind, rle) VALUES ('m1','A:2016-01-03T01:00:00Z','A','canopy',?)",
             (json.dumps(rle_encode(m)),),
         )
         conn.execute(
-            "INSERT INTO frames(id, tray_id, ts, path, cm2_per_px, calib_flag, source) VALUES ('A:t2','A','t2',?,0.01,'nominal','dataset')",
+            "INSERT INTO frames(id, tray_id, ts, path, cm2_per_px, calib_flag, source) VALUES ('A:2016-01-03T02:00:00Z','A','2016-01-03T02:00:00Z',?,0.01,'nominal','dataset')",
             ("data/derived/_test_overlay.jpg",),
         )
         conn.commit()
         conn.close()
-        monkeypatch.setattr(frames, "open_db", lambda: connect(db))
+        monkeypatch.setattr(deps, "open_db", lambda: connect(db))
         c = TestClient(app)
-        r = c.get("/trays/A/frames/A:t1/overlay")
+        r = c.get("/trays/A/frames/A:2016-01-03T01:00:00Z/overlay")
         assert (
             r.status_code == 200
             and r.headers["content-type"] == "image/png"
@@ -49,9 +49,9 @@ def test_overlay_and_image(tmp_path, monkeypatch):
             and (out[20, 20] != img[20, 20]).any()
             and (out[50, 70] == img[50, 70]).all()
         )
-        assert c.get("/trays/A/frames/A:t1/image").headers["content-type"] == "image/jpeg"
-        assert c.get("/trays/A/frames/A:t2/overlay").status_code == 404  # no mask yet
+        assert c.get("/trays/A/frames/A:2016-01-03T01:00:00Z/image").headers["content-type"] == "image/jpeg"
+        assert c.get("/trays/A/frames/A:2016-01-03T02:00:00Z/overlay").status_code == 404  # no mask yet
         assert c.get("/trays/A/frames/nope/image").status_code == 404
-        assert c.get("/trays/B/frames/A:t1/image").status_code == 404
+        assert c.get("/trays/B/frames/A:2016-01-03T01:00:00Z/image").status_code == 404
     finally:
         p.unlink(missing_ok=True)

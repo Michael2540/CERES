@@ -232,7 +232,7 @@ def test_growth_lag_must_hold_at_as_of_and_12h_earlier() -> None:
 
 
 def test_growth_lag_own_baseline_when_no_reference() -> None:
-    tray, as_of = CFG.by_id("L"), "2016-01-08T09:00:00Z"
+    tray, as_of = CFG.by_id("L").model_copy(update={"reference_tray_id": None}), "2016-01-08T09:00:00Z"  # own-baseline mode
     assert tray.reference_tray_id is None
     assert rules.growth_lag(tray, canopy_rows("L", 0.02), None, as_of, own_baseline=0.10) is not None
     assert rules.growth_lag(tray, canopy_rows("L", 0.09), None, as_of, own_baseline=0.10) is None

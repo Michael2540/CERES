@@ -1,4 +1,4 @@
 {"tray_id": "B", "metric": "chlorosis_frac", "unit": "fraction", "items": [
-  {"id": "B:chlorosis_frac:2016-01-02T10:00:00Z", "ts": "2016-01-02T10:00:00Z", "value": 0.08, "source": "derived"},
-  {"id": "B:chlorosis_frac:2016-01-03T10:00:00Z", "ts": "2016-01-03T10:00:00Z", "value": 0.22, "source": "derived"}
+  {"id": "B:chlorosis_frac:2016-01-02T10:00:00Z", "ts": "2016-01-02T10:00:00Z", "value": 0.08, "source": "fault_transform"},
+  {"id": "B:chlorosis_frac:2016-01-03T10:00:00Z", "ts": "2016-01-03T10:00:00Z", "value": 0.22, "source": "fault_transform"}
 ]}

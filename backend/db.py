@@ -30,7 +30,15 @@ CREATE TABLE IF NOT EXISTS sensor_readings(
 );
 CREATE TABLE IF NOT EXISTS alerts(
   id TEXT PRIMARY KEY, ts TEXT, tray_id TEXT, rule TEXT, severity TEXT, evidence_ids TEXT,
-  threshold_tag TEXT
+  threshold_tag TEXT,
+  detail TEXT NULL,     -- latest rule detail (e.g. which sensor and the flatline span)
+  status TEXT NULL,     -- open | resolved, end state of the last cycle (the API derives status per as_of)
+  first_ts TEXT NULL,   -- an alert row is an episode: first cycle in which the rule fired
+  last_ts TEXT NULL     -- latest cycle in which it fired
+);
+CREATE TABLE IF NOT EXISTS alert_events(
+  alert_id TEXT, ts TEXT, evidence_ids TEXT, detail TEXT,  -- one row per cycle in which the rule fired
+  PRIMARY KEY(alert_id, ts)
 );
 CREATE TABLE IF NOT EXISTS assessments(
   id TEXT PRIMARY KEY, ts TEXT, tray_id TEXT, alert_id TEXT, model TEXT, provider TEXT, json TEXT,
@@ -52,12 +60,16 @@ CREATE TABLE IF NOT EXISTS spend(
   id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, role TEXT, provider TEXT, model TEXT,
   input_tokens INT, output_tokens INT, images INT, cost_usd REAL
 );
+CREATE INDEX IF NOT EXISTS idx_readings ON sensor_readings(tray_id, metric, ts);
+CREATE INDEX IF NOT EXISTS idx_frames_tray_ts ON frames(tray_id, ts);
+CREATE INDEX IF NOT EXISTS idx_masks_frame ON masks(frame_id, kind);
+CREATE INDEX IF NOT EXISTS idx_alerts_rule ON alerts(rule, tray_id, ts);
 """
 
 
 def connect(path: str | Path) -> sqlite3.Connection:
     """Open a connection with dict-like rows."""
-    conn = sqlite3.connect(str(path))
+    conn = sqlite3.connect(str(path), check_same_thread=False, timeout=30)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -71,5 +83,9 @@ def init_db(path: str | Path) -> sqlite3.Connection:
     cols = {r[1] for r in conn.execute("PRAGMA table_info(frames)")}
     if "fault_hash" not in cols:  # database created before the column existed
         conn.execute("ALTER TABLE frames ADD COLUMN fault_hash TEXT NULL")
+    acols = {r[1] for r in conn.execute("PRAGMA table_info(alerts)")}
+    for col in ("detail", "status", "first_ts", "last_ts"):
+        if col not in acols:  # database created before the column existed
+            conn.execute(f"ALTER TABLE alerts ADD COLUMN {col} TEXT NULL")
     conn.commit()
     return conn

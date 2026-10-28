@@ -17,15 +17,20 @@ from backend.spend import BudgetExceeded, cost_for
 PROMPT = "plant"
 
 
-def pending_frames(conn: sqlite3.Connection, trays: list[str] | None = None) -> list[sqlite3.Row]:
+def pending_frames(
+    conn: sqlite3.Connection, trays: list[str] | None = None, as_of: str | None = None
+) -> list[sqlite3.Row]:
     q = (
         "SELECT f.id, f.tray_id, f.ts, f.path, f.cm2_per_px FROM frames f WHERE NOT EXISTS "
         "(SELECT 1 FROM masks m WHERE m.frame_id = f.id AND m.kind = 'canopy')"
     )
     args: list[str] = []
+    if as_of:  # ISO-Z strings compare chronologically
+        q += " AND f.ts <= ?"
+        args.append(as_of)
     if trays:
         q += f" AND f.tray_id IN ({','.join('?' * len(trays))})"
-        args = list(trays)
+        args += list(trays)
     return conn.execute(q + " ORDER BY f.ts, f.tray_id", args).fetchall()
 
 
@@ -93,9 +98,10 @@ def segment_frames(
     concurrency: int = 4,
     trays: list[str] | None = None,
     cache_dir: Path = CACHE_DIR,
+    as_of: str | None = None,
 ) -> dict:
     """Segment frames lacking a canopy row. DB access stays on the event-loop thread; calls run concurrently."""
-    frames = pending_frames(conn, trays)[: limit if limit is not None else None]
+    frames = pending_frames(conn, trays, as_of)[: limit if limit is not None else None]
     stats = {"frames": len(frames), "segmented": 0, "cache_hits": 0, "errors": 0, "budget_blocked": 0}
     roi = {t.id: tuple(t.roi) for t in cfg.trays}
 

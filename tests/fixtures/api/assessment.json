@@ -6,7 +6,7 @@
    {"claim": "Tray B canopy area fell from 655 to 612 cm2 (nominal) since fault start while control tray A grew from 720 to 757 cm2.",
     "evidence_ids": ["B:area_cm2:2016-01-03T10:00:00Z", "A:area_cm2:2016-01-03T10:00:00Z"], "confidence": 0.85},
    {"claim": "Simulated soil moisture in tray B dropped to 0.11 m3/m3.", "evidence_ids": ["B:soil_vwc:2016-01-03T10:00:00Z"], "confidence": 0.8},
-   {"claim": "Chlorosis fraction on tray B rose to 0.22 on the transformed frame.", "evidence_ids": ["B:chlorosis_frac:2016-01-03T10:00:00Z", "B_20160103T100000"], "confidence": 0.7}],
+   {"claim": "Chlorosis fraction on tray B rose to 0.22 on the transformed frame.", "evidence_ids": ["B:chlorosis_frac:2016-01-03T10:00:00Z", "B:2016-01-03T10:00:00Z"], "confidence": 0.7}],
   "probable_causes": [
    {"cause": "underwatering", "likelihood": 0.7, "evidence_ids": ["B:soil_vwc:2016-01-03T10:00:00Z", "B:area_cm2:2016-01-03T10:00:00Z"],
     "discriminating_check": "Check the substrate by hand and re-water; area should stop shrinking within a day."},

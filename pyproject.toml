@@ -30,3 +30,6 @@ asyncio_mode = "auto"
 line-length = 110
 target-version = "py311"
 extend-exclude = ["web", "data"]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/api/*" = ["B008"]  # FastAPI idiom: Depends()/Query() in argument defaults

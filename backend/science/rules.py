@@ -27,6 +27,16 @@ Row = dict[str, Any]
 SEVERITY = {"SENSOR_FAULT": "warning", "WILT_RISK": "alert", "LOW_VPD_RISK": "watch", "GROWTH_LAG": "watch"}
 FLAT_EPS = 1e-6
 EVAL_WINDOW_H = 72  # evaluate() looks at this much trailing data (plus the baselines it needs)
+
+# Episode gap: a rule that fires again within this many hours of its last firing continues the same alert
+# episode. Plant rules use the visual signal only while the lamp is on, so they go quiet over the 10 h
+# lamp-off night; 14 h keeps one fault as one episode. Sensor faults are instrument events: 2 h.
+EPISODE_GAP_H = {"SENSOR_FAULT": 2}
+PLANT_EPISODE_GAP_H = 14
+
+
+def episode_gap_h(rule: str) -> int:
+    return EPISODE_GAP_H.get(rule, PLANT_EPISODE_GAP_H)
 GROWTH_CONFIRM_H = 12  # GROWTH_LAG must also have held this long before as_of (see growth_lag)
 
 

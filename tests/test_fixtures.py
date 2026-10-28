@@ -62,6 +62,8 @@ def test_stream_ids_resolve_and_match_assessment():
 def test_provenance_enums():
     for f in DIR.glob("series_*.json"):
         for i in json.loads(f.read_text(encoding="utf-8"))["items"]:
-            assert i["source"] in {"sensor", "replay", "simulated", "derived"}
+            assert i["source"] in {
+                "sensor", "replay", "simulated", "derived", "dataset", "fault_transform", "fault_timewarp"
+            }
     for i in load("frames_B.json")["items"]:
         assert i["source"] in {"dataset", "fault_transform", "fault_timewarp"} and i["calib_flag"]

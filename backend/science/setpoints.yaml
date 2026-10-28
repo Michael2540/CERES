@@ -20,7 +20,9 @@ thresholds:
   wilt_soil_frac: {value: 0.6, unit: fraction of baseline median soil_vwc, rule: WILT_RISK, tag: author, confidence: low}
   wilt_area_drop: {value: 0.08, unit: fraction, rule: WILT_RISK, tag: author, confidence: low}
   wilt_exg_drop: {value: 0.10, unit: fraction, rule: WILT_RISK, tag: author, confidence: low}
-  wilt_window_h: {value: 6, unit: hours, rule: WILT_RISK, tag: author, confidence: low}
+  # The simulated wilt is gradual (~10% canopy area per day), so the rule looks at the max drop (peak to latest)
+  # within a 24 h window rather than a few hours.
+  wilt_window_h: {value: 24, unit: hours, rule: WILT_RISK, tag: author, confidence: low}
   vpd_low: {value: 0.4, unit: kPa, rule: LOW_VPD_RISK, tag: "author; pattern [E15]", confidence: low}
   low_vpd_hours: {value: 6, unit: hours of lamp-on time, rule: LOW_VPD_RISK, tag: "author; pattern [E15]", confidence: low}
   flatline_min: {value: 30, unit: minutes, rule: SENSOR_FAULT, tag: author, confidence: medium}

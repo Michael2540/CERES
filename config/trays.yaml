@@ -53,7 +53,7 @@ trays:
     aled_tray: PSI_Tray034
     treatment: humid_no_fan            # humidity dome, no fan -> low VPD
     fault_start: "2016-01-08T08:00:00Z"
-    reference_tray_id: null            # compared against its own pre-fault baseline
+    reference_tray_id: A               # all four ALED trays are one Arabidopsis cohort, so L is compared with control A
     roi: [65, 15, 905, 740]            # same PSI scanner geometry as tray A
     cm2_per_px: 0.01
     calib_flag: nominal

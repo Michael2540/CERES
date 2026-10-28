@@ -6,7 +6,7 @@ def test_trays():
     assert [t.id for t in cfg.trays] == ["A", "B", "C", "L"]
     assert cfg.by_id("B").reference_tray_id == "A"
     assert cfg.by_id("C").reference_tray_id == "A"
-    assert cfg.by_id("L").reference_tray_id is None
+    assert cfg.by_id("L").reference_tray_id == "A"
     assert cfg.by_id("A").fault_start is None
     assert cfg.by_id("B").fault.shrink_per_day and cfg.by_id("B").fault.desat_per_day
     assert cfg.by_id("C").fault.growth_factor == 0.4 and cfg.by_id("C").fault.brightness_factor == 0.6
