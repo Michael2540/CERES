@@ -18,7 +18,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.api import actions, alerts, deps, evidence, frames, series, system, trays
+from backend.api import actions, alerts, assessments, deps, evidence, frames, series, system, trays
 from backend.config import load_settings, load_trays
 from backend.perception.sam_client import get_backend
 from backend.pipeline import run_cycle
@@ -99,7 +99,7 @@ async def _validation_error(_req: Request, exc: RequestValidationError) -> JSONR
     return JSONResponse({"detail": errs}, status_code=422)
 
 
-for module in (frames, trays, series, alerts, evidence, actions, system):
+for module in (frames, trays, series, alerts, evidence, actions, system, assessments):
     app.include_router(module.router)
 
 

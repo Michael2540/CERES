@@ -73,7 +73,7 @@ def list_trays(
     return {"items": [summary(conn, t, as_of, shared) for t in load_trays().trays]}
 
 
-def _latest_value(conn: sqlite3.Connection, owner: str, metric: str, hi: str) -> dict | None:
+def latest_value(conn: sqlite3.Connection, owner: str, metric: str, hi: str) -> dict | None:
     r = conn.execute(
         "SELECT ts, value FROM sensor_readings WHERE tray_id = ? AND metric = ? AND ts <= ?"
         " ORDER BY ts DESC LIMIT 1",
@@ -94,8 +94,8 @@ def tray_detail(
     cal = canopy_table(conn, t.id, iso_z(as_of - timedelta(hours=48)), hi)
     last = cal[-1] if cal else None
     owner = climate_owner(conn, t.id)
-    temp, rh = _latest_value(conn, owner, "temp_c", hi), _latest_value(conn, owner, "rh_pct", hi)
-    soil = _latest_value(conn, t.id, "soil_vwc", hi)
+    temp, rh = latest_value(conn, owner, "temp_c", hi), latest_value(conn, owner, "rh_pct", hi)
+    soil = latest_value(conn, t.id, "soil_vwc", hi)
     vpd = vpd_kpa(temp["value"], rh["value"]) if temp and rh and temp["ts"] == rh["ts"] else None
     latest = {
         "ts": last["ts"] if last else None,

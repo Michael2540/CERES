@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS alert_events(
 );
 CREATE TABLE IF NOT EXISTS assessments(
   id TEXT PRIMARY KEY, ts TEXT, tray_id TEXT, alert_id TEXT, model TEXT, provider TEXT, json TEXT,
-  citation_errors TEXT, valid BOOL, latency_ms INT, cost_usd REAL, recorded BOOL
+  citation_errors TEXT, valid BOOL, latency_ms INT, cost_usd REAL, recorded BOOL,
+  updated_at REAL NULL  -- heartbeat (unix time) of a running assessment, for the SSE stall check
 );
 CREATE TABLE IF NOT EXISTS tool_log(
   assessment_id TEXT, round INT, tool TEXT, args TEXT, returned_ids TEXT
@@ -87,5 +88,7 @@ def init_db(path: str | Path) -> sqlite3.Connection:
     for col in ("detail", "status", "first_ts", "last_ts"):
         if col not in acols:  # database created before the column existed
             conn.execute(f"ALTER TABLE alerts ADD COLUMN {col} TEXT NULL")
+    if "updated_at" not in {r[1] for r in conn.execute("PRAGMA table_info(assessments)")}:
+        conn.execute("ALTER TABLE assessments ADD COLUMN updated_at REAL NULL")
     conn.commit()
     return conn

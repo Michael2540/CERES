@@ -6,6 +6,7 @@ alert `alert_<...>`, crew note by its row id. Nothing after as_of is resolvable.
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 from datetime import datetime, timedelta
@@ -15,10 +16,42 @@ from fastapi import APIRouter, Depends, HTTPException
 from backend.api import deps
 from backend.api.alerts import visible_alerts
 from backend.api.series import ALL_METRICS, CANOPY_METRICS, canopy_table, growth_points, vpd_points
+from backend.science.setpoints import default_setpoints
+from backend.science.vpd import vpd_kpa
 from backend.timeutil import iso_z, parse_ts
 
 router = APIRouter()
 _METRIC_ID = re.compile(r"^(?P<tray>[A-Za-z0-9]+):(?P<metric>[a-z0-9_]+):(?P<ts>\d{4}-\d\d-\d\dT[\d:]+Z)$")
+
+
+def _resolve_calc(conn: sqlite3.Connection, eid: str, hi: str) -> dict | None:
+    """`calc:vpd:<n>`: a compute_vpd call, found in tool_log; its ts is the investigation clock of the run."""
+    for r in conn.execute(
+        "SELECT t.args, a.ts FROM tool_log t JOIN assessments a ON a.id = t.assessment_id"
+        " WHERE t.tool = 'compute_vpd' AND t.returned_ids LIKE ?",
+        (f'%"{eid}"%',),
+    ):
+        if r["ts"] <= hi:
+            args = json.loads(r["args"])
+            return {
+                "id": eid, "kind": "calc", "tray_id": None, "ts": r["ts"], "metric": "vpd_kpa",
+                "value": vpd_kpa(float(args["temp_c"]), float(args["rh_pct"])), "source": "derived",
+            }
+    return None
+
+
+def _resolve_setpoint(eid: str) -> dict | None:
+    sp = default_setpoints()
+    key = eid.removeprefix("setpoint:")
+    if key.startswith("threshold:"):
+        row = sp.thresholds.get(key.removeprefix("threshold:"))
+        value = row["value"] if row else None
+    else:
+        row = next((r for r in sp.rows if r["id"] == key), None)
+        value = row["value"] if row else None
+    if row is None:
+        return None
+    return {"id": eid, "kind": "setpoint", "tray_id": None, "ts": None, "value": value, "source": "setpoints.yaml"}
 
 
 def resolve(conn: sqlite3.Connection, eid: str, as_of: datetime) -> dict | None:
@@ -41,6 +74,10 @@ def resolve(conn: sqlite3.Connection, eid: str, as_of: datetime) -> dict | None:
     n = conn.execute("SELECT id, ts FROM crew_notes WHERE id = ?", (eid,)).fetchone()
     if n and n["ts"] <= hi:
         return {"id": eid, "kind": "note", "tray_id": None, "ts": n["ts"]}
+    if eid.startswith("calc:vpd:"):
+        return _resolve_calc(conn, eid, hi)
+    if eid.startswith("setpoint:"):
+        return _resolve_setpoint(eid)
     m = _METRIC_ID.match(eid)
     if not m or m["ts"] > hi or m["metric"] not in ALL_METRICS:
         return None

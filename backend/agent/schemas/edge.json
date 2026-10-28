@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tray_id", "urgency", "likely_cause", "evidence_ids", "crew_instruction", "handoff_note_for_earth"],
+  "properties": {
+    "tray_id": {"type": "string"},
+    "urgency": {"enum": ["now", "next_check", "log_only"]},
+    "likely_cause": {"enum": ["underwatering", "overwatering", "low_light", "excess_light", "high_vpd", "low_vpd", "temperature_stress", "co2_anomaly", "nutrient_ph_issue", "sensor_fault", "camera_fault", "normal_variation", "other"]},
+    "evidence_ids": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "crew_instruction": {"type": "string", "maxLength": 300},
+    "handoff_note_for_earth": {"type": "string", "maxLength": 300}
+  }
+}

@@ -208,7 +208,7 @@ def test_every_alert_evidence_id_resolves(api):
 
 def test_actions_change_status(api):
     assert api.post("/actions/act1", json={"decision": "approve"}).json() == {"action_id": "act1", "status": "approved"}
-    assert api.post("/actions/act1", json={"decision": "reject"}).json()["status"] == "rejected"
+    assert api.post("/actions/act1", json={"decision": "reject"}).status_code == 409  # only a pending action can be decided
     assert api.post("/actions/act1", json={"decision": "maybe"}).status_code == 422
     assert api.post("/actions/nope", json={"decision": "approve"}).status_code == 404
 

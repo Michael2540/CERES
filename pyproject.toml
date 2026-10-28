@@ -32,4 +32,5 @@ target-version = "py311"
 extend-exclude = ["web", "data"]
 
 [tool.ruff.lint.per-file-ignores]
+"tests/test_agent_review.py" = ["F811", "F401"]  # reuses the fixtures of test_agent.py by import
 "backend/api/*" = ["B008"]  # FastAPI idiom: Depends()/Query() in argument defaults
