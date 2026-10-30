@@ -54,7 +54,7 @@ Planned and switchable: the Mars-mode edge model (`EDGE_MODE=recorded|remote_gli
 | Replayable mission clock; alert episodes; no data from after the current mission time ever reaches the UI | ✅ |
 | Muse Spark Flight Agronomist with 8 logged tools, citation validator, SSE streaming | ✅ |
 | Mission-control dashboard (Next.js) with provenance badges, charts, frame scrubber, agent panel | ✅ |
-| Validation of SAM masks against ALED hand annotations | ⏳ M6 |
+| Validation of SAM masks against 55 ALED hand-annotated frames, with a colour-threshold baseline (shown on /trust) | ✅ |
 | Evaluation harness (≥ 8 scenarios, small n, reported as fractions) | ⏳ M7 |
 | Mars mode: link delay, on-board triage, Earth-side audit | ⏳ M8 |
 
@@ -100,6 +100,7 @@ Tests: `make test` (backend), `make lint`, `cd web && npx playwright test`.
 - ALED has no real stress treatments, so every fault is simulated on real images, and the evaluation can only measure how well CERES recovers *simulated* faults.
 - ALED removes plants for destructive sampling every few days. CERES tracks growth per pot so these removals don't read as shrinkage.
 - Thresholds are author-chosen and mostly relative to the control tray. There are no sourced Arabidopsis setpoints.
+- On mask quality SAM 3.1 does not beat a simple colour threshold on these high-contrast frames (Dice 0.88 vs 0.89; area error 29 % vs 16 %), and it traces the smallest seedlings generously (up to about twice the annotated area). Its advantage is separating touching plants: per-pot area r 0.97 vs 0.23 and exact plant count 75 % vs 56 % when each method's instances are assigned to pots, as CERES does.
 - Canopy area in cm² uses a nominal scale (the dataset has no calibration marker). Pixel area is the primary metric.
 
 ## Team

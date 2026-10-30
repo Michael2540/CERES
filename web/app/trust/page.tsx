@@ -3,6 +3,7 @@
 import { ErrorNote, Loading, Panel } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAsync } from "@/lib/mission";
+import type { AreaAgg, AreaValidation } from "@/lib/types";
 
 const SOURCE_NAMES: Record<string, string> = {
   dataset: "Real frames (ALED, no fault)",
@@ -15,8 +16,7 @@ const SOURCE_NAMES: Record<string, string> = {
 export default function TrustPage() {
   const ev = useAsync((a) => api.evalLatest(a), []);
   const d = ev.data;
-  const av = d?.area_validation;
-  const avEmpty = !av || (av.dice === null && av.iou === null && av.pearson_r === null);
+  const av = useAsync(() => api.areaValidation(), []);
   return (
     <div className="mx-auto max-w-5xl space-y-4">
       <h1 className="text-xl font-semibold">Trust</h1>
@@ -57,15 +57,14 @@ export default function TrustPage() {
       </Panel>
 
       <Panel title="Area validation">
-        {avEmpty ? (
+        {av.error && <ErrorNote error={av.error} retry={av.reload} />}
+        {!av.data && av.loading && <Loading what="Loading validation" />}
+        {!av.data && !av.loading && !av.error && (
           <p className="text-sm text-slate-500" data-testid="area-empty">
-            No validation numbers yet. The ground-truth comparison (lettuce ground truth, not our trays) lands in M6.
-          </p>
-        ) : (
-          <p className="font-mono text-sm">
-            Dice {av!.dice ?? "n/a"} · IoU {av!.iou ?? "n/a"} · Pearson r {av!.pearson_r ?? "n/a"}
+            No validation numbers yet. Run scripts/validate_area.py to compare SAM 3.1 with the ALED hand-annotated ground truth.
           </p>
         )}
+        {av.data && <AreaValidationView v={av.data} />}
       </Panel>
 
       <Panel title="What is real, what is simulated" className="text-sm">
@@ -95,6 +94,70 @@ export default function TrustPage() {
         <p data-testid="footer-built">Built with Muse Spark · SAM 3.1</p>
         <p>Images: Aberystwyth Leaf Evaluation Dataset (CC BY 4.0)</p>
       </footer>
+    </div>
+  );
+}
+
+const f2 = (v: number | null | undefined) => (v === null || v === undefined ? "n/a" : v.toFixed(2));
+const pct = (v: number | null | undefined) => (v === null || v === undefined ? "n/a" : `${Math.round(v * 100)}%`);
+
+function AreaValidationView({ v }: { v: AreaValidation }) {
+  const s = v.sam.overall;
+  const small = v.sam.by_stage.small;
+  const row = (label: string, a: AreaAgg, id: string) => (
+    <tr className="border-t border-slate-800" data-testid={id}>
+      <td className="py-1 text-slate-300">{label}</td>
+      <td className="py-1 text-right font-mono">{f2(a.dice_mean)}</td>
+      <td className="py-1 text-right font-mono">{pct(a.area_mape)}</td>
+      <td className="py-1 text-right font-mono">{f2(a.pot_pearson_r)}</td>
+      <td className="py-1 text-right font-mono">{f2(a.inst_pot_pearson_r)}</td>
+      <td className="py-1 text-right font-mono">{pct(a.inst_plant_exact_frac)}</td>
+    </tr>
+  );
+  return (
+    <div className="space-y-3" data-testid="area-validation">
+      <p className="text-sm text-slate-300">SAM 3.1 against hand annotation on real, untransformed ALED frames.</p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <Stat label="Images" value={String(v.n_images)} note={`of ${v.n_gt} annotated`} testId="area-n" />
+        <Stat label="Dice" value={f2(s.dice_mean)} note={`median ${f2(s.dice_median)}`} testId="area-dice" />
+        <Stat label="IoU" value={f2(s.iou_mean)} note="mean" testId="area-iou" />
+        <Stat label="Area error" value={pct(s.area_mape)} note={`mean; seedlings ${pct(small.area_mape)}`} testId="area-mape" />
+        <Stat label="Per-pot r" value={f2(s.inst_pot_pearson_r)} note={`SAM instances, ${s.pot_n ?? 0} pots`} testId="area-pot-r" />
+        <Stat label="Plant count" value={pct(s.inst_plant_exact_frac)} note={`exact; MAE ${f2(s.inst_plant_mae)}`} testId="area-plants" />
+      </div>
+      <table className="w-full text-sm" data-testid="area-compare">
+        <thead>
+          <tr className="text-[11px] uppercase tracking-wider text-slate-500">
+            <th className="text-left font-normal">Method</th>
+            <th className="text-right font-normal">Dice</th>
+            <th className="text-right font-normal">Area error</th>
+            <th className="text-right font-normal">Pot r (mask)</th>
+            <th className="text-right font-normal">Pot r (instances)</th>
+            <th className="text-right font-normal">Plants exact</th>
+          </tr>
+        </thead>
+        <tbody>
+          {row("SAM 3.1", s, "area-row-sam")}
+          {row(`HSV (${v.baseline_hsv.label})`, v.baseline_hsv.overall, "area-row-hsv")}
+        </tbody>
+      </table>
+      <p className="text-xs text-slate-400" data-testid="area-reading">
+        Read honestly: on mask quality the colour threshold is as good as SAM or slightly better (Dice, area error,
+        and per-pot area when each mask is simply split by pot). SAM traces the smallest seedlings generously, up to
+        about twice the annotated area. SAM&apos;s advantage is instances: it keeps touching rosettes apart, so per-pot
+        areas and plant counts built from its instances (as CERES does) hold up, while the threshold merges
+        neighbours. &quot;Pot r (instances)&quot; and &quot;Plants exact&quot; use each method&apos;s instances; plant counts
+        differ only on the larger, touching plants. Per-pot r pools pots of every growth stage.
+      </p>
+      <p className="text-xs text-slate-400" data-testid="area-trays">
+        By tray: {Object.entries(v.sam.by_tray).map(([t, a]) => `${t} n=${a.n}, Dice ${f2(a.dice_mean)}`).join(" · ")}
+      </p>
+      {v.partial && (
+        <p className="rounded border border-amber-600/50 bg-amber-950/30 p-2 text-xs text-amber-200" data-testid="area-partial">
+          Partial: {v.n_images} of {v.n_gt} annotated frames are scored so far.
+        </p>
+      )}
+      <p className="text-xs text-slate-500" data-testid="area-caption">{v.caption}</p>
     </div>
   );
 }

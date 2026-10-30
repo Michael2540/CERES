@@ -81,7 +81,16 @@ test("trust page", async ({ page }) => {
   await expect(page.getByTestId("top1-table")).toContainText("2/3");
   await expect(page.getByTestId("top1-table")).not.toContainText("%");
   await expect(page.getByTestId("small-n")).toBeVisible();
-  await expect(page.getByTestId("area-empty")).toContainText("M6");
+  await expect(page.getByTestId("area-empty")).toHaveCount(0);
+  await expect(page.getByTestId("area-n")).toContainText("55");
+  await expect(page.getByTestId("area-dice")).toContainText("0.88");
+  await expect(page.getByTestId("area-mape")).toContainText("29%");
+  await expect(page.getByTestId("area-row-hsv")).toContainText("colour-threshold baseline, not a model");
+  await expect(page.getByTestId("area-trays")).toContainText("A n=43");
+  await expect(page.getByTestId("area-partial")).toHaveCount(0);
+  await expect(page.getByTestId("area-reading")).toContainText("SAM's advantage is instances");
+  await expect(page.getByTestId("area-caption")).toContainText("Bell & Dee 2016");
+  await expect(page.getByText(/lettuce/i)).toHaveCount(0);
   await expect(page.getByText("the measurement is real; the input fault is simulated.")).toBeVisible();
   await expect(page.getByTestId("blind-note")).toContainText("deliberately not told which inputs are simulated");
   await expect(page.getByText("Built with Muse Spark · SAM 3.1")).toBeVisible();

@@ -22,6 +22,7 @@ Thumbs.db
 data/raw/
 data/*.db
 backend/eval/out/*.json
+!backend/eval/out/area_validation.json
 !backend/eval/out/.gitkeep
 web/.next
 web/node_modules

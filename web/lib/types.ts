@@ -140,6 +140,31 @@ export type EvalLatest = {
   top1: Record<string, string>;
   citation_errors: number;
   mean_latency_ms: number | null;
-  area_validation?: { dice: number | null; iou: number | null; pearson_r: number | null } | null;
   [k: string]: unknown;
+};
+
+/** Aggregates of one slice of the area validation (null where undefined, e.g. Pearson r on one image). */
+export type AreaAgg = {
+  n: number;
+  dice_mean?: number | null; dice_median?: number | null; dice_min?: number | null;
+  iou_mean?: number | null; iou_median?: number | null; iou_min?: number | null;
+  pooled_dice?: number | null; area_pearson_r?: number | null; area_r2?: number | null; area_mape?: number | null;
+  pot_n?: number; pot_pearson_r?: number | null; plant_exact_frac?: number | null; plant_mae?: number | null;
+  /** Per pot via the method's own instances (centroid rule, as production assigns them). */
+  inst_pot_pearson_r?: number | null; inst_plant_exact_frac?: number | null; inst_plant_mae?: number | null;
+};
+export type AreaBreakdown = {
+  overall: AreaAgg;
+  by_tray: Record<string, AreaAgg>;
+  by_stage: { median_gt_px: number; small: AreaAgg; large: AreaAgg };
+};
+/** GET /eval/area-validation: SAM 3.1 vs ALED hand annotation on raw frames (static, not time-gated). */
+export type AreaValidation = {
+  model: string; prompt: string; caption: string;
+  n_images: number; n_gt: number; n_cached: number; n_called: number; cost_usd: number;
+  partial: boolean; generated_at: string;
+  sam: AreaBreakdown;
+  baseline_hsv: AreaBreakdown & { label: string };
+  worst: { frame: string; dice: number; overlay: string | null }[];
+  per_image: { frame: string; tray: string; dice: number; iou: number; gt_px: number; sam_px: number; gt_plants: number; sam_plants: number; inst_plants?: number }[];
 };

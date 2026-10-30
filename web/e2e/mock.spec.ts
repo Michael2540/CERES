@@ -16,6 +16,7 @@ type Mode = {
   assessmentId: string | null; // set on the alert in GET /alerts
   assessment: "done" | "running" | "failed" | "404";
   stream: "events" | "abort";
+  area: "ok" | "404" | "partial";
   assessPosts: number;
   clockPosts: number;
   unexpected: string[];
@@ -24,7 +25,7 @@ type Mode = {
 async function mockApi(page: Page, init: Partial<Mode> = {}) {
   const m: Mode = {
     asOf: "2016-01-03T12:00:00Z", assessmentId: null, assessment: "done", stream: "events",
-    assessPosts: 0, clockPosts: 0, unexpected: [], ...init,
+    area: "ok", assessPosts: 0, clockPosts: 0, unexpected: [], ...init,
   };
   const json = (route: Route, body: unknown, status = 200) =>
     route.fulfill({ status, contentType: "application/json", headers: CORS, body: JSON.stringify(body) });
@@ -49,6 +50,10 @@ async function mockApi(page: Page, init: Partial<Mode> = {}) {
     if (p.startsWith("/evidence/")) {
       const e = fx("evidence.json")[decodeURIComponent(p.slice("/evidence/".length))];
       return e ? json(route, e) : json(route, { detail: "unknown or future evidence id" }, 404);
+    }
+    if (p === "/eval/latest") return json(route, fx("eval_latest.json"));
+    if (p === "/eval/area-validation") {
+      return m.area === "404" ? json(route, { detail: "area validation has not been run" }, 404) : json(route, m.area === "partial" ? { ...fx("area_validation.json"), partial: true } : fx("area_validation.json"));
     }
     if (p === "/spend") return json(route, fx("spend.json"));
     if (p === "/trays") return json(route, fx("trays.json"));
@@ -167,5 +172,28 @@ test("tray page renders in real-API mode without console errors", async ({ page 
   await expect(page.getByTestId("chart-area_cm2")).toBeVisible();
   await expect(page.getByTestId("frame-ts")).toBeVisible();
   expect(errors).toEqual([]);
+  expect(m.unexpected).toEqual([]);
+});
+
+test("trust page shows the area validation from /eval/area-validation", async ({ page }) => {
+  const m = await mockApi(page, { area: "partial" });
+  await page.goto("/trust");
+  await expect(page.getByTestId("area-n")).toContainText("55");
+  await expect(page.getByTestId("area-dice")).toContainText("0.88");
+  await expect(page.getByTestId("area-mape")).toContainText("29%");
+  await expect(page.getByTestId("area-pot-r")).toContainText("0.97");
+  await expect(page.getByTestId("area-plants")).toContainText("75%");
+  await expect(page.getByTestId("area-row-hsv")).toContainText("not a model");
+  await expect(page.getByTestId("area-partial")).toBeVisible();
+  await expect(page.getByTestId("area-empty")).toHaveCount(0);
+  expect(m.unexpected).toEqual([]);
+});
+
+test("trust page keeps the empty state when the validation report is missing (404)", async ({ page }) => {
+  const m = await mockApi(page, { area: "404" });
+  await page.goto("/trust");
+  await expect(page.getByTestId("area-empty")).toBeVisible();
+  await expect(page.getByTestId("area-n")).toHaveCount(0);
+  await expect(page.getByTestId("scoreboard")).toBeVisible();
   expect(m.unexpected).toEqual([]);
 });

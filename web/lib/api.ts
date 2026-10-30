@@ -1,5 +1,5 @@
 import type {
-  AlertItem, AssessmentResponse, Clock, EvalLatest, Evidence, Frame, Page, Series, Spend, StreamEvent,
+  AlertItem, AreaValidation, AssessmentResponse, Clock, EvalLatest, Evidence, Frame, Page, Series, Spend, StreamEvent,
   TrayDetail, TrayListItem,
 } from "./types";
 
@@ -44,6 +44,7 @@ async function fixtureGet(path: string, params: Params): Promise<unknown> {
     return { items: d.items.filter((a) => !params.tray_id || a.tray_id === params.tray_id) };
   }
   if (path === "/eval/latest") return fx("eval_latest.json");
+  if (path === "/eval/area-validation") return fx("area_validation.json");
   if (path === "/link") return fx("link.json");
   if (parts[0] === "trays" && parts.length === 2) {
     if (parts[1] === "B") return fx("tray_B.json");
@@ -153,6 +154,12 @@ export const api = {
   evidence: (id: string, asOf?: string) => get<Evidence>(`/evidence/${id}`, { as_of: asOf }),
   decide: (actionId: string, decision: "approve" | "reject") =>
     post<{ action_id: string; status: string }>(`/actions/${actionId}`, {}, { decision }),
+  /** Static validation report (not as_of-gated); null when it has not been generated (404). */
+  areaValidation: () =>
+    get<AreaValidation>("/eval/area-validation").catch((e) => {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }),
   evalLatest: (asOf?: string) => get<EvalLatest>("/eval/latest", { as_of: asOf }),
 };
 

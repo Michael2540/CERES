@@ -39,6 +39,7 @@ All third-party libraries, data, and assets used are listed below with their lic
 | 2026-10-27 | M1–M3: frame ingest, simulated faults on trays B/C, SAM client with cache and budget guard, canopy metrics, simulated sensor hub, rules. |
 | 2026-10-28 | **`sam-3.1`** segmented all 844 frames ($1.95, 0 errors). M3b: pipeline, mission replay clock, read API, alert episodes. |
 | 2026-10-28 | M4: **`muse-spark-1.3`** Flight Agronomist (tools, citation validator, SSE). Live: B wilt alert → valid assessment, underwatering 0.80, $0.094. |
+| 2026-10-30 | M6: **`sam-3.1`** validated against 55 ALED hand-annotated frames (39 new calls, $0.10) with a colour-threshold baseline; `/eval/area-validation` and the /trust card. |
 | 2026-10-30 | M5: mission-control dashboard. Adversarial audit (honesty/compliance and end-to-end correctness) and fix round: per-pot tracking, latched wilt alert, validator and disclosure fixes. sam-3.1 re-segmented 83 tray B frames ($0.21). |
 
 ## Submission Checklist
