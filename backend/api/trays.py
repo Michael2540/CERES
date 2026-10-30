@@ -21,7 +21,7 @@ STATUS_BY_SEVERITY = {"alert": 2, "warning": 1, "watch": 1}
 
 
 def open_alerts(conn: sqlite3.Connection, tray_id: str, as_of: datetime) -> list[dict]:
-    """Episodes of this tray that fired within the last 2 h before as_of (see api/alerts.py)."""
+    """Open episodes of this tray: fired within the rule's episode gap before as_of (see api/alerts.py)."""
     return [
         {"id": a["id"], "rule": a["rule"], "severity": a["severity"]}
         for a in visible_alerts(conn, as_of, tray_id)
@@ -51,19 +51,28 @@ def visible_fault_start(t: TrayConfig, as_of: datetime) -> str | None:
     return t.fault_start if t.fault_start and t.fault_start <= iso_z(as_of) else None
 
 
+def treatment_and_badge(t: TrayConfig, as_of: datetime) -> tuple[str, str]:
+    """(treatment, badge) as disclosed at as_of: a tray whose fault has not started yet looks like plain
+    dataset footage (`undisclosed`, DATASET); from the visible fault_start on, the real treatment and badge."""
+    if t.fault_start is None or visible_fault_start(t, as_of) is not None:
+        return t.treatment, deps.BADGES[t.treatment]
+    return "undisclosed", deps.BADGES["control"]
+
+
 def summary(
     conn: sqlite3.Connection, t: TrayConfig, as_of: datetime, shared: list[dict] | None = None
 ) -> dict:
     hi = iso_z(as_of)
     alerts = open_alerts(conn, t.id, as_of)
+    treatment, badge = treatment_and_badge(t, as_of)
     return {
         "id": t.id,
         "crop": t.crop,
-        "treatment": t.treatment,
+        "treatment": treatment,
         "status": status_of(alerts),
         "fault_start": visible_fault_start(t, as_of),
         "reference_tray_id": t.reference_tray_id,
-        "badge": deps.BADGES[t.treatment],
+        "badge": badge,
         "open_alerts": len(alerts),
         "latest_frame_id": latest_frame_id(conn, t.id, hi),
         "shared_alerts": shared if shared is not None else shared_alerts(conn, as_of),
@@ -120,7 +129,7 @@ def tray_detail(
     return {
         "id": t.id,
         "crop": t.crop,
-        "treatment": t.treatment,
+        "treatment": s["treatment"],
         "status": s["status"],
         "fault_start": visible_fault_start(t, as_of),
         "reference_tray_id": t.reference_tray_id,

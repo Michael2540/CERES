@@ -16,7 +16,7 @@ export default function Home() {
       <section aria-label="Trays">
         <h1 className="mb-1 text-sm font-semibold uppercase tracking-wider text-slate-400">Trays</h1>
         <p className="mb-3 text-xs text-slate-500">
-          Real ALED plant images; sensors and faults are simulated, and every card says which.
+          ALED plant images: real frames. Trays B and C carry labelled simulated faults after their fault start; sensors are simulated.
         </p>
         {trays.error && <ErrorNote error={trays.error} retry={trays.reload} />}
         {!trays.data && trays.loading && <Loading what="Loading trays" />}

@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from backend.config import ROOT, TrayConfig, TraysConfig
+from backend.perception import pots
 from backend.perception.ingest import DERIVED_DIR, ingest_folder
 from backend.perception.sam_client import SamBackend
 from backend.perception.segment import segment_frames
@@ -53,12 +54,18 @@ def seed_trays(conn: sqlite3.Connection, cfg: TraysConfig) -> None:
 def canopy_rows(conn: sqlite3.Connection, tray_id: str, as_of: str, since: str | None = None) -> list[dict]:
     """Canopy metric rows (one per segmented frame) with since <= ts <= as_of, oldest first."""
     rows = conn.execute(
-        "SELECT f.id AS frame_id, f.ts, m.area_px, m.area_cm2, m.exg, m.chlorosis_frac FROM masks m"
+        "SELECT f.id AS frame_id, f.ts, m.area_px, m.area_cm2, m.exg, m.chlorosis_frac,"
+        " m.pots_json FROM masks m"
         " JOIN frames f ON f.id = m.frame_id WHERE m.kind = 'canopy' AND f.tray_id = ? AND f.ts <= ?"
         " AND f.ts >= ? ORDER BY f.ts",
         (tray_id, as_of, since or ""),
     ).fetchall()
-    return [{**dict(r), "id": f"{tray_id}:area_cm2:{r['ts']}"} for r in rows]
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["pots"] = pots.load_pots(d.pop("pots_json"))  # pot -> area_px; None for rows without per-pot data
+        out.append({**d, "id": f"{tray_id}:area_cm2:{r['ts']}"})
+    return out
 
 
 def reading_rows(

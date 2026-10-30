@@ -2,7 +2,9 @@
 
 An `alerts` row is an episode (first_ts..last_ts) and `alert_events` has one row per cycle in which the rule
 fired. At as_of an episode is visible iff first_ts <= as_of; its ts, evidence_ids and detail come from its
-latest event <= as_of, and it is open iff it has an event in (as_of - 2 h, as_of]. Nothing after as_of leaks.
+latest event <= as_of, and it is open iff that event is newer than the rule's episode gap before as_of
+(`rules.episode_gap_h`: 2 h for SENSOR_FAULT, 14 h for the plant rules, which go quiet over the lamp-off night),
+else resolved. Nothing after as_of leaks.
 """
 
 from __future__ import annotations

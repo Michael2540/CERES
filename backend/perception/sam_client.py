@@ -8,7 +8,7 @@ Integrity rules for the `api` backend:
   and the frame gets no masks row);
 - spend is recorded exactly once per completed paid call, before decoding, so a later decode failure is
   still ledgered;
-- the cache stores the verified raw output text keyed by sha256(image bytes) + prompt + backend, and masks
+- the cache stores the verified raw output text keyed by (raw frame sha256, fault_hash, prompt, backend), and masks
   are decoded from it. A retry after a decode failure therefore re-decodes from disk and never re-bills.
   A cache hit makes no backend call and records no spend;
 - budget is reserved under an asyncio lock at check time, so concurrent calls cannot overshoot the cap.
@@ -289,21 +289,53 @@ def get_backend(name: str | None, conn: sqlite3.Connection) -> SamBackend:
     raise ValueError(f"unknown SAM_BACKEND {name!r} (api|hsv)")
 
 
-def cache_key(image_path: str | Path, prompt: str, backend_name: str) -> str:
-    h = hashlib.sha256(Path(image_path).read_bytes()).hexdigest()
-    return hashlib.sha256(f"{h}|{prompt}|{backend_name}".encode()).hexdigest()
+def _sha(path: str | Path) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def cache_path(image_path: str | Path, prompt: str, backend_name: str, cache_dir: Path = CACHE_DIR) -> Path:
-    return cache_dir / f"{cache_key(image_path, prompt, backend_name)}.json"
+def legacy_cache_key(image_path: str | Path, prompt: str, backend_name: str) -> str:
+    """The pre-fault_hash key: sha256 of the (possibly re-encoded derived) image bytes. Kept for migration."""
+    return hashlib.sha256(f"{_sha(image_path)}|{prompt}|{backend_name}".encode()).hexdigest()
+
+
+def cache_key(
+    image_path: str | Path,
+    prompt: str,
+    backend_name: str,
+    raw_path: str | Path | None = None,
+    fault_hash: str | None = None,
+) -> str:
+    """Key on (raw frame sha, fault_hash, prompt, backend). A derived frame (tray B/C fault) passes its raw
+    ALED frame and the frame's fault_hash, so re-encoding the derived JPEG never changes the key while a
+    changed fault (new FAULTS_VERSION or parameters) does. Without a fault_hash the key is the image sha
+    alone, identical to the legacy key, so dataset frames need no migration."""
+    h = _sha(raw_path if raw_path is not None else image_path)
+    fh = f"|{fault_hash}" if fault_hash else ""
+    return hashlib.sha256(f"{h}{fh}|{prompt}|{backend_name}".encode()).hexdigest()
+
+
+def cache_path(
+    image_path: str | Path,
+    prompt: str,
+    backend_name: str,
+    cache_dir: Path = CACHE_DIR,
+    raw_path: str | Path | None = None,
+    fault_hash: str | None = None,
+) -> Path:
+    return cache_dir / f"{cache_key(image_path, prompt, backend_name, raw_path, fault_hash)}.json"
 
 
 async def segment_cached(
-    backend: SamBackend, image_path: str | Path, prompt: str = "plant", cache_dir: Path = CACHE_DIR
+    backend: SamBackend,
+    image_path: str | Path,
+    prompt: str = "plant",
+    cache_dir: Path = CACHE_DIR,
+    raw_path: str | Path | None = None,
+    fault_hash: str | None = None,
 ) -> tuple[list[Mask], bool]:
     """(masks, from_cache). Only a verified payload is cached, before decoding, so a decode failure after a
     paid call is retried from disk without a second call. A hit makes no backend call and records no spend."""
-    p = cache_path(image_path, prompt, backend.name, cache_dir)
+    p = cache_path(image_path, prompt, backend.name, cache_dir, raw_path, fault_hash)
     cached = json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
     hit = isinstance(cached, dict) and "payload" in cached  # older cache formats count as a miss
     if hit:

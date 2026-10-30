@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS plants(
 );
 CREATE TABLE IF NOT EXISTS masks(
   id TEXT PRIMARY KEY, frame_id TEXT, tray_id TEXT, plant_id TEXT NULL, kind TEXT,
-  area_px INT, area_cm2 REAL, exg REAL, chlorosis_frac REAL, rle TEXT
+  area_px INT, area_cm2 REAL, exg REAL, chlorosis_frac REAL, rle TEXT,
+  pots_json TEXT NULL  -- canopy rows: {pot id: area_px} per pot (backend/perception/pots.py)
 );
 CREATE TABLE IF NOT EXISTS embeddings(
   mask_id TEXT PRIMARY KEY, model TEXT, vec BLOB, drift REAL, drift_z REAL
@@ -88,6 +89,8 @@ def init_db(path: str | Path) -> sqlite3.Connection:
     for col in ("detail", "status", "first_ts", "last_ts"):
         if col not in acols:  # database created before the column existed
             conn.execute(f"ALTER TABLE alerts ADD COLUMN {col} TEXT NULL")
+    if "pots_json" not in {r[1] for r in conn.execute("PRAGMA table_info(masks)")}:
+        conn.execute("ALTER TABLE masks ADD COLUMN pots_json TEXT NULL")
     if "updated_at" not in {r[1] for r in conn.execute("PRAGMA table_info(assessments)")}:
         conn.execute("ALTER TABLE assessments ADD COLUMN updated_at REAL NULL")
     conn.commit()

@@ -62,15 +62,22 @@ def _kind(tray: TrayConfig) -> str | None:
     return None
 
 
+TIMEWARP_VERSION = "wilt-3"  # frozen: tray C's hash must not change when the wilt transform (FAULTS_VERSION) does
+
+
 def fault_hash(tray: TrayConfig) -> str | None:
-    """Hash of everything that determines a derived frame (None when the tray has no image fault)."""
-    if _kind(tray) is None:
+    """Hash of everything that determines a derived frame (None when the tray has no image fault). The wilt
+    transform (tray B) is versioned by FAULTS_VERSION and the ROI margin; the time-warp (tray C) only changes
+    with its own parameters, so regenerating B never invalidates C's masks or SAM cache entries."""
+    kind = _kind(tray)
+    if kind is None:
         return None
-    blob = json.dumps(
-        {"v": FAULTS_VERSION, "start": tray.fault_start, "p": tray.fault.model_dump(), "roi": tray.roi},
-        sort_keys=True,
-    )
-    return hashlib.sha256(blob.encode()).hexdigest()[:16]
+    body = {"start": tray.fault_start, "p": tray.fault.model_dump(), "roi": tray.roi}
+    if kind == "fault_transform":
+        body |= {"v": FAULTS_VERSION, "margin": tray.roi_margin_px}
+    else:
+        body |= {"v": TIMEWARP_VERSION}
+    return hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()[:16]
 
 
 def _derive(tray: TrayConfig, ts: datetime, raw: dict[datetime, Path], out: Path) -> str:
@@ -81,7 +88,7 @@ def _derive(tray: TrayConfig, ts: datetime, raw: dict[datetime, Path], out: Path
         before = [t for t in raw if t <= fault_start]
         ref = cv2.imread(str(raw[max(before)])) if before else None  # last real frame <= fault_start
         days = (ts - fault_start).total_seconds() / 86400.0
-        img = wilt_transform(cv2.imread(str(raw[ts])), days, f, tuple(tray.roi), ref)
+        img = wilt_transform(cv2.imread(str(raw[ts])), days, f, tuple(tray.roi), ref, tray.roi_margin_px)
     else:
         src = timewarp_source_ts(ts, fault_start, f.growth_factor, sorted(raw))
         img = cv2.imread(str(raw[src]))

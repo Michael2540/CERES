@@ -33,6 +33,8 @@ def _minutes(hhmm: str) -> int:
 
 
 def lamp_is_on(lamp: _Lamp, dt: datetime) -> bool:
-    """True when the lamp schedule (UTC HH:MM on/off, same day) has the lamp on at dt."""
-    minute = dt.astimezone(UTC).hour * 60 + dt.astimezone(UTC).minute
-    return _minutes(lamp.on) <= minute < _minutes(lamp.off)
+    """True when the lamp schedule (UTC HH:MM on/off) has the lamp on at dt. An overnight schedule (off before
+    on, e.g. 20:00-06:00) is on from `on` to midnight and from midnight to `off`; on == off means always off."""
+    t = dt.astimezone(UTC)
+    minute, on, off = t.hour * 60 + t.minute, _minutes(lamp.on), _minutes(lamp.off)
+    return on <= minute < off if on <= off else minute >= on or minute < off

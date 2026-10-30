@@ -46,6 +46,10 @@ async function mockApi(page: Page, init: Partial<Mode> = {}) {
       m.asOf = req.postDataJSON().as_of ?? m.asOf;
       return json(route, clock());
     }
+    if (p.startsWith("/evidence/")) {
+      const e = fx("evidence.json")[decodeURIComponent(p.slice("/evidence/".length))];
+      return e ? json(route, e) : json(route, { detail: "unknown or future evidence id" }, 404);
+    }
     if (p === "/spend") return json(route, fx("spend.json"));
     if (p === "/trays") return json(route, fx("trays.json"));
     if (/^\/trays\/[A-Z]$/.test(p)) return p.endsWith("B") ? json(route, fx("tray_B.json")) : json(route, { error: "n/a" }, 404);
@@ -97,6 +101,9 @@ test("double-clicking confirm sends exactly one POST /assess", async ({ page }) 
   await expect(page.getByTestId("assessment")).toBeVisible({ timeout: 15_000 });
   expect(m.assessPosts).toBe(1);
   await expect(page.getByTestId("run-meta")).toContainText("$0.090");
+  // every evidence chip carries a provenance tag from /evidence `source`
+  await expect(page.getByTestId("evidence-prov").first()).toBeVisible();
+  await expect(page.getByTestId("assessment")).toContainText("SIMULATED FAULT");
   expect(m.unexpected).toEqual([]);
 });
 

@@ -8,6 +8,8 @@ trays:
     fault_start: null                  # ISO UTC when the simulated fault begins; null = no fault
     reference_tray_id: null            # tray compared against; null = none
     roi: [65, 15, 905, 740]            # x,y,w,h px in the 1024x768 frame: the PSI tray (20 pots), checked on tray A
+    roi_margin_px: 40                  # canopy clip = ROI grown by this margin (leaves overhang the tray edge)
+    pot_grid: {cols: 5, rows: 4}       # 5x4 pots: even split of the ROI; optional cells: {"r,c": [x,y,w,h]} overrides
     cm2_per_px: 0.01                   # nominal scale (no ArUco marker in ALED); placeholder
     calib_flag: nominal                # nominal = configured constant, not measured
     lamp: {"on": "08:00", "off": "22:00"}  # UTC; aligned to ALED imaging hours (frames 09:00-22:00)
@@ -22,6 +24,7 @@ trays:
     fault_start: "2016-01-05T08:00:00Z"   # bigger plants make wilting visible
     reference_tray_id: A               # compared against control tray A
     roi: [65, 15, 905, 740]            # same PSI scanner geometry as tray A
+    pot_grid: {cols: 5, rows: 4}
     cm2_per_px: 0.01
     calib_flag: nominal
     lamp: {"on": "08:00", "off": "22:00"}  # UTC; aligned to ALED imaging hours
@@ -39,6 +42,7 @@ trays:
     fault_start: "2016-01-03T08:00:00Z"   # after the 2016-01-01 imaging gap
     reference_tray_id: A
     roi: [65, 15, 905, 740]            # same PSI scanner geometry as tray A
+    pot_grid: {cols: 5, rows: 4}
     cm2_per_px: 0.01
     calib_flag: nominal
     lamp: {"on": "08:00", "off": "22:00"}  # UTC; aligned to ALED imaging hours
@@ -55,6 +59,7 @@ trays:
     fault_start: "2016-01-08T08:00:00Z"
     reference_tray_id: A               # all four ALED trays are one Arabidopsis cohort, so L is compared with control A
     roi: [65, 15, 905, 740]            # same PSI scanner geometry as tray A
+    pot_grid: {cols: 5, rows: 4}
     cm2_per_px: 0.01
     calib_flag: nominal
     lamp: {"on": "08:00", "off": "22:00"}  # UTC; aligned to ALED imaging hours

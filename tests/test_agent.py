@@ -521,10 +521,11 @@ def _logged(conn, aid, ids):
     conn.commit()
 
 
-def _propose(conn, aid, tray="B", action="Water tray B"):
+def _propose(conn, aid, tray="B", action="Water tray B", magnitude="moderate"):
     conn.execute(
         "INSERT INTO actions(id, ts, tray_id, assessment_id, proposal_json, status) VALUES (?,?,?,?,?,'pending')",
-        (f"act_{aid}_{tray}_{action}", AS_OF, tray, aid, json.dumps({"tray_id": tray, "action": action})))
+        (f"act_{aid}_{tray}_{action}_{magnitude}", AS_OF, tray, aid,
+         json.dumps({"tray_id": tray, "action": action, "magnitude": magnitude})))
     conn.commit()
 
 

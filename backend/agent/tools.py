@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
-from backend.agent.validate import logged_ids
+from backend.agent.validate import TOOL_WINDOW_H, logged_ids
 from backend.api.alerts import visible_alerts
 from backend.api.series import (
     SENSOR_METRICS,
@@ -38,7 +38,7 @@ from backend.science.vpd import vpd_kpa
 from backend.sim.clock import DATASET_START, mission_day
 from backend.timeutil import iso_z, parse_ts
 
-MAX_HOURS = 72
+MAX_HOURS = TOOL_WINDOW_H
 MAX_POINTS = 48
 MAX_FRAMES = 6
 MAX_NOTES = 20
@@ -223,7 +223,9 @@ def get_tray_overview(ctx: ToolContext, args: dict) -> tuple[dict, list[str]]:
             if v is not None:
                 latest.append({"id": f"{tray}:{m}:{last['ts']}", "metric": m, "ts": last["ts"], "value": v,
                                "unit": UNITS[m], "source": "camera"})
-        latest.append({"id": last["frame_id"], "metric": "latest_frame", "ts": last["ts"], "source": "camera"})
+        # not citable (no "id"): a frame becomes evidence only once get_frames has attached it
+        latest.append({"frame_id": last["frame_id"], "metric": "latest_frame", "ts": last["ts"],
+                       "source": "camera", "note": "call get_frames to view and cite this frame"})
     soil = latest_value(conn, tray, "soil_vwc", hi)
     if soil:
         latest.append({"id": f"{tray}:soil_vwc:{soil['ts']}", "metric": "soil_vwc", "ts": soil["ts"],
@@ -253,7 +255,7 @@ def get_tray_overview(ctx: ToolContext, args: dict) -> tuple[dict, list[str]]:
         "open_alerts": open_alerts,
         "shared_air_sensor_alerts": shared,
     }
-    ids = [x["id"] for x in latest]
+    ids = [x["id"] for x in latest if "id" in x]
     for a in (*open_alerts, *shared):  # built from alert rows, not from model-influenced text
         ids += [a["id"], *a["evidence_ids"]]
     return result, list(dict.fromkeys(ids))

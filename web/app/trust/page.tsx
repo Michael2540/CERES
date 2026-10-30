@@ -74,8 +74,9 @@ export default function TrustPage() {
             <h3 className="font-semibold text-emerald-300">Real</h3>
             <ul className="mt-1 list-disc pl-4 text-slate-300">
               <li>Plant images from the Aberystwyth Leaf Evaluation Dataset (ALED), CC BY 4.0.</li>
-              <li>SAM 3.1 segmentation of those frames: the canopy measurements are computed, not guessed.</li>
+              <li>SAM 3.1 segments the frames (B and C partly transformed): the measurement is real; the input fault is simulated.</li>
               <li>Muse Spark&apos;s investigations, with every citation checked automatically.</li>
+              <li data-testid="blind-note">The agent is deliberately not told which inputs are simulated, so it is tested blind. Every evidence chip it cites shows its provenance.</li>
             </ul>
           </div>
           <div className="rounded border border-sky-700/60 bg-sky-950/20 p-2">

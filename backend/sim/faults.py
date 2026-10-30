@@ -12,9 +12,12 @@ Tray B, wilting (`wilt_transform`), a drought seen from above:
   affine warp (soft alpha edge, no erosion, so no holes), dulled, and pasted onto a soil background.
   Transformed plant area is therefore area_at_fault_start * s(d)^2: monotone non-increasing in d, constant
   once s_min is reached (9 days with the defaults), and never larger than at fault_start.
-- Background: the current raw frame everywhere except under its own plants (dilated 5 px); under them the
-  soil comes from the reference frame with its plants inpainted away (cv2.inpaint TELEA), so the soil, tray
-  and sensor noise stay real and no leaf colour bleeds into the fill.
+- Background: the current raw frame everywhere except under its own plants; ALL of them are erased, over the
+  whole frame (not clipped to the ROI) with the mask dilated 7 px (plus dim, shaded leaf parts within 21 px of
+  it, `erase_mask`), so no ghost of a growing leaf survives.
+  Under them the soil comes from the reference frame with its plants (whole frame, dilated 7 px) inpainted
+  away (cv2.inpaint TELEA), so the soil, tray and sensor noise stay real and no leaf colour bleeds into the fill.
+  Reference plants inside the ROI grown by `margin` px are the ones shrunk and pasted back.
 - Colour: t = min(1, desat_per_day * d). Plant pixels blend toward grey-olive: hue toward 19 (38 degrees,
   inside the chlorosis band), saturation x (1 - 0.35 t), value x (1 - 0.15 t). Subtle on day 1, obvious by
   day 3-4. The dulled plant stays inside the HSV plant mask, so area metrics do not collapse on colour.
@@ -35,12 +38,16 @@ import numpy as np
 
 from backend.config import FaultParams
 
-FAULTS_VERSION = "wilt-3"
+FAULTS_VERSION = "wilt-4"  # wilt-4: every plant pixel of both frames is erased (no ROI clip, 7 px fill margin)
 PLANT_LO = (15, 50, 90)  # OpenCV HSV: hue 30-180 degrees, covers yellow-green to green
 PLANT_HI = (90, 255, 255)
 TARGET_HUE = 19.0  # OpenCV units, 38 degrees
 MIN_PLANT_PX = 150
 JOIN_PX = 15
+FILL_PX = 15  # structuring-element size (7 px radius) the plant masks are dilated by before they are erased
+NEAR_PX = 43  # dim leaf parts (shade under the pot rim) are erased too when within 21 px of a plant pixel
+DIM_LO = (22, 40, 35)  # OpenCV HSV floor of "leaf-ish": dark green that the plant threshold misses
+ROI_MARGIN_PX = 40  # reference plants within the ROI grown by this margin are shrunk (matches the canopy clip)
 
 
 def plant_mask(img_bgr: np.ndarray, roi: tuple[int, int, int, int] | None = None) -> np.ndarray:
@@ -53,6 +60,17 @@ def plant_mask(img_bgr: np.ndarray, roi: tuple[int, int, int, int] | None = None
         keep[y : y + h, x : x + w] = True
         m &= keep
     return m
+
+
+def erase_mask(img_bgr: np.ndarray) -> np.ndarray:
+    """Every pixel that belongs to a plant of this frame, for erasing: the plant mask dilated 7 px, plus
+    dim green leaf parts (shaded under the pot rim, below the plant threshold) within 21 px of it."""
+    strict = plant_mask(img_bgr).astype(np.uint8)
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+    dim = cv2.inRange(hsv, np.array(DIM_LO), np.array(PLANT_HI)) > 0
+    near = cv2.dilate(strict, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (NEAR_PX, NEAR_PX))) > 0
+    fill = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (FILL_PX, FILL_PX))
+    return cv2.dilate(((strict > 0) | (dim & near)).astype(np.uint8), fill) > 0
 
 
 def scale_at(days: float, params: FaultParams) -> float:
@@ -75,11 +93,12 @@ def wilt_transform(
     params: FaultParams,
     roi: tuple[int, int, int, int] | None = None,
     ref_img: np.ndarray | None = None,
+    margin: int = ROI_MARGIN_PX,
 ) -> np.ndarray:
     """Shrink and dull the reference plants of a frame by the time since fault_start (tray B, module doc).
 
-    ref_img is the last real frame at or before fault_start (the frame itself when None); roi restricts
-    where reference plants are looked for.
+    ref_img is the last real frame at or before fault_start (the frame itself when None); reference plants are
+    looked for inside roi grown by `margin` px.
     """
     if days_since_fault <= 0:
         return img_bgr.copy()
@@ -88,13 +107,19 @@ def wilt_transform(
     t = min(1.0, (params.desat_per_day or 0.0) * days_since_fault)
     h, w = ref.shape[:2]
 
-    ref_mask = plant_mask(ref, roi)
+    region = None
+    if roi is not None:
+        rx, ry, rw, rh = roi
+        x0, y0 = max(rx - margin, 0), max(ry - margin, 0)
+        region = (x0, y0, min(rx + rw + margin, w) - x0, min(ry + rh + margin, h) - y0)
+    ref_mask = plant_mask(ref, region)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (JOIN_PX, JOIN_PX))
     joined = cv2.morphologyEx(ref_mask.astype(np.uint8), cv2.MORPH_CLOSE, kernel)
     n, labels, _, _ = cv2.connectedComponentsWithStats(joined, connectivity=8)
 
-    cur_hole = cv2.dilate(plant_mask(img_bgr).astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
-    ref_hole = cv2.dilate(ref_mask.astype(np.uint8), np.ones((5, 5), np.uint8)) * 255
+    fill = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (FILL_PX, FILL_PX))
+    cur_hole = erase_mask(img_bgr)  # every current plant pixel (whole frame), dim leaf parts and fringe included
+    ref_hole = cv2.dilate(plant_mask(ref).astype(np.uint8), fill) * 255  # every reference plant pixel (inpainted)
     soil = cv2.inpaint(ref, ref_hole, 5, cv2.INPAINT_TELEA)
     out = img_bgr.copy()
     out[cur_hole] = soil[cur_hole]  # same-size frames: soil under the current plants, from the reference

@@ -19,6 +19,7 @@ test("overview shows header, four tray cards, provenance and alert feed", async 
   await expect(page.getByTestId("clock-text")).toContainText("Mission day 21");
   await expect(page.getByTestId("spend-meter")).toContainText("Meta spend $4.37 · runtime guard $100");
   await expect(page.getByTestId("link-chip")).toHaveText("LINK: UP (simulated)");
+  await expect(page.getByText("ALED plant images: real frames. Trays B and C carry labelled simulated faults")).toBeVisible();
   for (const id of ["A", "B", "C", "L"]) await expect(page.getByTestId(`tray-card-${id}`)).toBeVisible();
   await expect(page.getByTestId("prov-A")).toHaveText("DATASET");
   await expect(page.getByTestId("prov-B")).toHaveText("SIMULATED FAULT · image transform");
@@ -81,6 +82,8 @@ test("trust page", async ({ page }) => {
   await expect(page.getByTestId("top1-table")).not.toContainText("%");
   await expect(page.getByTestId("small-n")).toBeVisible();
   await expect(page.getByTestId("area-empty")).toContainText("M6");
+  await expect(page.getByText("the measurement is real; the input fault is simulated.")).toBeVisible();
+  await expect(page.getByTestId("blind-note")).toContainText("deliberately not told which inputs are simulated");
   await expect(page.getByText("Built with Muse Spark · SAM 3.1")).toBeVisible();
   await expect(page.getByText("Images: Aberystwyth Leaf Evaluation Dataset (CC BY 4.0)")).toBeVisible();
   expect(errors).toEqual([]);

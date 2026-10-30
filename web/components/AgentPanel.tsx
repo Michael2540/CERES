@@ -1,13 +1,13 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api, streamAssessment } from "@/lib/api";
 import { useMission } from "@/lib/mission";
 import type { AlertItem, AssessmentResponse, Evidence, StreamEvent } from "@/lib/types";
-import { Empty, ErrorNote, fmt, shortTs } from "./ui";
+import { Empty, ErrorNote, fmt, shortTs, sourceLabel } from "./ui";
 
-const COST_ESTIMATE = "~$0.10 (measured)";
+const COST_ESTIMATE = "~$0.10–0.20 (2 measured runs)";
 
 export default function AgentPanel() {
   const { panelAlert, openPanel, asOf, hourKey } = useMission();
@@ -207,6 +207,30 @@ function PanelBody({ alert }: { alert: AlertItem }) {
   };
 
   const a = result?.assessment ?? null;
+  // Provenance of every cited id (the /evidence `source`, or its kind), shown as a small tag on each chip.
+  const [prov, setProv] = useState<Record<string, string>>({});
+  const provRef = useRef(prov);
+  provRef.current = prov;
+  const citedIds = useMemo(
+    () =>
+      Array.from(
+        new Set([...(a?.findings ?? []), ...(a?.probable_causes ?? []), ...(a?.recommended_actions ?? [])].flatMap((x) => x.evidence_ids)),
+      ),
+    [a],
+  );
+  useEffect(() => {
+    let alive = true;
+    for (const id of citedIds) {
+      if (id in provRef.current) continue;
+      api
+        .evidence(id, asOfRef.current)
+        .then((ev) => alive && setProv((p) => ({ ...p, [id]: ev.source ?? ev.kind })))
+        .catch(() => undefined);
+    }
+    return () => {
+      alive = false;
+    };
+  }, [citedIds]);
   const terminal = result !== null && result.valid !== null;
   const failed = result !== null && result.valid !== null && (result.valid === false || a === null);
   const unverified = result?.valid === false;
@@ -371,7 +395,7 @@ function PanelBody({ alert }: { alert: AlertItem }) {
                       <div className="flex justify-between text-xs"><span className="font-semibold">{c.cause.replace(/_/g, " ")}</span><span className="font-mono">{fmt(c.likelihood)}</span></div>
                       <div className="h-2 rounded bg-slate-800"><div className="h-2 rounded bg-emerald-500" style={{ width: `${Math.round(c.likelihood * 100)}%` }} /></div>
                       {c.discriminating_check && <p className="mt-0.5 text-[11px] text-slate-400">Check: {c.discriminating_check}</p>}
-                      <Chips ids={c.evidence_ids} onClick={chip} />
+                      <Chips ids={c.evidence_ids} onClick={chip} prov={prov} />
                     </li>
                   ))}
                 </ul>
@@ -382,7 +406,7 @@ function PanelBody({ alert }: { alert: AlertItem }) {
                   {a.findings.map((f, i) => (
                     <li key={i} className="text-slate-200">
                       {f.claim} <span className="text-[11px] text-slate-500">(confidence {fmt(f.confidence)})</span>
-                      <Chips ids={f.evidence_ids} onClick={chip} />
+                      <Chips ids={f.evidence_ids} onClick={chip} prov={prov} />
                     </li>
                   ))}
                 </ul>
@@ -405,7 +429,7 @@ function PanelBody({ alert }: { alert: AlertItem }) {
                   {a.recommended_actions.map((r, i) => (
                     <li key={i} className="text-slate-200">
                       <b>{r.action}</b>{r.magnitude ? ` (${r.magnitude})` : ""}{r.rationale ? `: ${r.rationale}` : ""}
-                      <Chips ids={r.evidence_ids} onClick={chip} />
+                      <Chips ids={r.evidence_ids} onClick={chip} prov={prov} />
                     </li>
                   ))}
                 </ul>
@@ -427,7 +451,7 @@ function PanelBody({ alert }: { alert: AlertItem }) {
   );
 }
 
-function Chips({ ids, onClick }: { ids: string[]; onClick: (id: string) => void }) {
+function Chips({ ids, onClick, prov }: { ids: string[]; onClick: (id: string) => void; prov: Record<string, string> }) {
   if (!ids.length) return null;
   return (
     <div className="mt-1 flex flex-wrap gap-1">
@@ -440,6 +464,11 @@ function Chips({ ids, onClick }: { ids: string[]; onClick: (id: string) => void 
           className="max-w-full truncate rounded-full border border-yellow-700/60 bg-yellow-950/40 px-2 py-0.5 font-mono text-[10px] text-yellow-200 hover:bg-yellow-900/50"
         >
           {id}
+          {prov[id] && (
+            <span data-testid="evidence-prov" className="ml-1 rounded bg-slate-800 px-1 text-[9px] font-sans font-semibold text-slate-300">
+              {sourceLabel(prov[id])}
+            </span>
+          )}
         </button>
       ))}
     </div>

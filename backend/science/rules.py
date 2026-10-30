@@ -18,6 +18,7 @@ from statistics import median
 from typing import Any
 
 from backend.config import TrayConfig
+from backend.perception import pots
 from backend.science.setpoints import Setpoints, default_setpoints
 from backend.science.vpd import vpd_kpa
 from backend.timeutil import iso_z, lamp_is_on, parse_ts
@@ -181,6 +182,52 @@ def baseline_value(
     return median(vals) if vals else None
 
 
+def _drop(a: Row, b: Row, key: str) -> float | None:
+    """Fractional drop of `key` from row a to row b. For area_px, only pots holding a plant in BOTH rows count
+    (a pot emptied by sampling is not a drop); rows without per-pot data use the total."""
+    if key == "area_px" and (tp := pots.tracked_pair(a, b)) is not None:
+        return None if tp[2] == 0 or tp[0] <= 0 else (tp[0] - tp[1]) / tp[0]
+    return (a[key] - b[key]) / a[key] if a.get(key) and b.get(key) is not None and a[key] > 0 else None
+
+
+LATCH_PREFAULT_D = 7  # the pre-fault peak is looked for in this many days before fault_start
+
+
+def _wilt_latched(
+    tray: TrayConfig, history: Series, as_of: datetime, sp: Setpoints, soil_id: str
+) -> Alert | None:
+    """While the soil stays dry, the canopy still below (1 - wilt_area_drop) x its pre-fault peak (tracked
+    pots), or ExG below its pre-fault peak x (1 - wilt_exg_drop), keeps the rule firing: one drought, one
+    episode. Does not need a drop inside the last wilt_window_h. Only frames taken with the scheduled lamp on
+    count, and the area branch needs per-pot data on both rows (a total-area drop may be plant removal)."""
+    if not tray.fault_start or not len(history):
+        return None
+    fs = parse_ts(tray.fault_start)
+    h = history.upto(as_of)
+    if as_of < fs or not len(h) or as_of - h.ts[-1] > timedelta(hours=sp.value("wilt_window_h")):
+        return None
+    w = h.between(fs - timedelta(days=LATCH_PREFAULT_D), as_of)
+    lit = [(t, r) for t, r in zip(w.ts, w.rows) if lamp_is_on(tray.lamp, t)]
+    if not lit or as_of - lit[-1][0] > timedelta(hours=sp.value("wilt_window_h")):
+        return None
+    last = lit[-1][1]
+    pre = [r for t, r in lit if t < fs]
+    for key, thr in (("area_px", "wilt_area_drop"), ("exg", "wilt_exg_drop")):
+        if last.get(key) is None or (key == "area_px" and last.get("pots") is None):
+            continue
+        drops = [
+            (d, r)
+            for r in pre
+            if r is not last and (key != "area_px" or r.get("pots") is not None) and (d := _drop(r, last, key)) is not None
+        ]
+        if drops:
+            d, peak = max(drops, key=lambda x: x[0])
+            if d > sp.value(thr):
+                ids = [soil_id, peak["id"], last["id"]]
+                return _alert("WILT_RISK", tray.id, as_of, ids, sp.tag("wilt_soil_frac"), f"soil + {key} (latched)")
+    return None
+
+
 def wilt_risk(
     tray: TrayConfig,
     soil_vwc: Sequence[Row] | Series,
@@ -190,9 +237,12 @@ def wilt_risk(
     baseline: tuple[datetime, datetime] | None = None,
     sp: Setpoints | None = None,
     base_value: float | None = None,
+    history: Sequence[Row] | Series | None = None,
 ) -> Alert | None:
     """Soil_vwc below wilt_soil_frac x baseline median AND, within wilt_window_h with the lamp on,
-    canopy area down > wilt_area_drop OR ExG down > wilt_exg_drop (peak to latest)."""
+    canopy area down > wilt_area_drop (tracked pots, max drop from any earlier row to the latest) OR ExG down
+    > wilt_exg_drop (peak to latest). With `history` (all canopy rows <= as_of) the rule then latches: it keeps
+    firing while the soil is dry and the canopy is still below its pre-fault peak (`_wilt_latched`)."""
     sp, as_of = sp or default_setpoints(), parse_ts(as_of)
     soil = Series.of(soil_vwc).upto(as_of)
     if not len(soil):
@@ -204,17 +254,20 @@ def wilt_risk(
     lamp = Series.of(lamp_on)
     win = Series.of(canopy).between(as_of - timedelta(hours=sp.value("wilt_window_h")), as_of)
     rows = [r for t, r in zip(win.ts, win.rows, strict=True) if _lamp_at(lamp, tray, t)]
-    if len(rows) < 2:
-        return None
-    last = rows[-1]
-    for key, thr in (("area_px", "wilt_area_drop"), ("exg", "wilt_exg_drop")):
-        vals = [r for r in rows if r.get(key) is not None]
-        if len(vals) < 2 or vals[-1] is not last:
-            continue
-        peak = max(vals, key=lambda r: r[key])
-        if peak[key] > 0 and (peak[key] - last[key]) / peak[key] > sp.value(thr):
-            ids = [last_soil["id"], peak["id"], last["id"]]
-            return _alert("WILT_RISK", tray.id, as_of, ids, sp.tag("wilt_soil_frac"), f"soil + {key}")
+    if len(rows) >= 2:
+        last = rows[-1]
+        for key, thr in (("area_px", "wilt_area_drop"), ("exg", "wilt_exg_drop")):
+            vals = [r for r in rows if r.get(key) is not None]
+            if len(vals) < 2 or vals[-1] is not last:
+                continue
+            drops = [(d, r) for r in vals[:-1] if (d := _drop(r, last, key)) is not None]
+            if drops:
+                d, peak = max(drops, key=lambda x: x[0])
+                if d > sp.value(thr):
+                    ids = [last_soil["id"], peak["id"], last["id"]]
+                    return _alert("WILT_RISK", tray.id, as_of, ids, sp.tag("wilt_soil_frac"), f"soil + {key}")
+    if history is not None:
+        return _wilt_latched(tray, Series.of(history), as_of, sp, last_soil["id"])
     return None
 
 
@@ -256,7 +309,8 @@ def vpd_series(temp: Sequence[Row] | Series, rh: Sequence[Row] | Series) -> list
 
 # --- GROWTH_LAG --------------------------------------------------------------------------------------
 def _growth(rows: Series, as_of: datetime, window_h: float) -> tuple[float, Row, Row] | None:
-    """Relative canopy growth per `window_h` hours over the window ending at the latest row <= as_of."""
+    """Relative canopy growth per `window_h` hours over the window ending at the latest row <= as_of, on the
+    tracked-pot area (pots holding a plant at BOTH ends; the total area_px for rows without per-pot data)."""
     up = rows.upto(as_of)
     keep = [k for k, r in enumerate(up.rows) if r.get("area_px")]
     pts = Series([up.ts[k] for k in keep], [up.rows[k] for k in keep])
@@ -270,7 +324,14 @@ def _growth(rows: Series, as_of: datetime, window_h: float) -> tuple[float, Row,
     span_h = (t1 - t0).total_seconds() / 3600
     if span_h > 1.5 * window_h:
         return None
-    return (end["area_px"] / start["area_px"] - 1) * window_h / span_h, start, end
+    tp = pots.tracked_pair(start, end)  # only pots holding a plant at both ends (destructive sampling)
+    if tp is None:  # rows without per-pot data: the total
+        a0, a1 = start["area_px"], end["area_px"]
+    elif tp[2] == 0 or tp[0] <= 0:
+        return None
+    else:
+        a0, a1 = tp[0], tp[1]
+    return (a1 / a0 - 1) * window_h / span_h, start, end
 
 
 def own_growth_baseline(
@@ -377,7 +438,7 @@ def evaluate(
         skip.append("WILT_RISK")
     else:
         base = baseline_value(tray, soil_full, as_of, sp=sp)
-        if a := wilt_risk(tray, soil_full.between(trail, as_of), cano, lamp, as_of, sp=sp, base_value=base):
+        if a := wilt_risk(tray, soil_full.between(trail, as_of), cano, lamp, as_of, sp=sp, base_value=base, history=cano_full):
             out.append(a)
 
     t_s, rh_s = get(climate, "temp_c"), get(climate, "rh_pct")

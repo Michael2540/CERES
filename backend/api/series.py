@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.api import deps
+from backend.perception import pots
 from backend.perception.metrics import growth_rate_24h
 from backend.science.vpd import vpd_kpa
 from backend.timeutil import iso_z, parse_ts
@@ -18,7 +19,7 @@ from backend.timeutil import iso_z, parse_ts
 router = APIRouter()
 
 SENSOR_METRICS = ("temp_c", "rh_pct", "co2_ppm", "soil_raw", "soil_vwc", "lamp_on", "ppfd_est")
-CANOPY_METRICS = ("area_px", "area_cm2", "exg", "chlorosis_frac", "growth_rate", "drift_z")
+CANOPY_METRICS = ("area_px", "area_cm2", "exg", "chlorosis_frac", "growth_rate", "drift_z", "plant_count")
 ALL_METRICS = (*SENSOR_METRICS, *CANOPY_METRICS, "vpd_kpa")
 UNITS = {
     "temp_c": "C",
@@ -34,6 +35,7 @@ UNITS = {
     "chlorosis_frac": "fraction",
     "growth_rate": "ln(area)/day",
     "drift_z": "z",
+    "plant_count": "plants",
     "vpd_kpa": "kPa",
 }
 
@@ -57,19 +59,26 @@ def sensor_points(conn: sqlite3.Connection, tray_id: str, metric: str, lo: str, 
 def canopy_table(conn: sqlite3.Connection, tray_id: str, lo: str, hi: str) -> list[dict]:
     """Canopy rows with lo <= ts <= hi (oldest first) incl. drift_z when an embedding exists."""
     rows = conn.execute(
-        "SELECT f.id AS frame_id, f.ts, f.source, m.area_px, m.area_cm2, m.exg, m.chlorosis_frac, e.drift_z"
+        "SELECT f.id AS frame_id, f.ts, f.source, m.area_px, m.area_cm2, m.exg, m.chlorosis_frac, m.pots_json, e.drift_z"
         " FROM masks m JOIN frames f ON f.id = m.frame_id LEFT JOIN embeddings e ON e.mask_id = m.id"
         " WHERE m.kind = 'canopy' AND f.tray_id = ? AND f.ts >= ? AND f.ts <= ? ORDER BY f.ts",
         (tray_id, lo, hi),
     ).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["pots"] = pots.load_pots(d.pop("pots_json"))
+        d["plant_count"] = pots.plant_count(d["pots"])  # pots holding a plant; None without per-pot data
+        out.append(d)
+    return out
 
 
 def growth_points(rows: list[dict]) -> dict[str, float | None]:
     """growth_rate_24h at each row's ts, from the rows (which must include the preceding 24 h)."""
     ts = [parse_ts(r["ts"]) for r in rows]
     area = [r["area_px"] for r in rows]
-    return {r["ts"]: growth_rate_24h(ts, area, t) for r, t in zip(rows, ts, strict=True)}
+    per_pot = [r["pots"] for r in rows] if rows and all(r["pots"] is not None for r in rows) else None
+    return {r["ts"]: growth_rate_24h(ts, area, t, per_pot) for r, t in zip(rows, ts, strict=True)}
 
 
 def canopy_points(conn: sqlite3.Connection, tray_id: str, metric: str, lo: datetime, hi: datetime) -> list[dict]:

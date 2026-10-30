@@ -20,7 +20,7 @@ FRAME_HOURS = range(9, 15)  # one frame per hour, lamp on
 
 def _img(side: int) -> np.ndarray:
     img = np.full((768, 1024, 3), (40, 50, 70), np.uint8)
-    img[300 : 300 + side, 400 : 400 + side] = (30, 170, 60)  # BGR green rosette
+    img[250 : 250 + side, 300 : 300 + side] = (30, 170, 60)  # BGR green rosette, inside pot (1,1) of the 5x4 grid
     return img
 
 

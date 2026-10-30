@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Iterator
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import HTTPException, Query
 
@@ -21,9 +22,18 @@ BADGES = {
 }
 
 
+_migrated: set[Path] = set()
+
+
 def open_db() -> sqlite3.Connection:
+    """Connection to the configured DB. The first open of each path per process runs init_db, which creates a
+    missing DB and migrates an old one (added columns); later opens skip it so requests don't take the lock."""
     path = ROOT / load_settings().db_path
-    return connect(path) if path.is_file() else init_db(path)  # a missing DB gets the schema
+    if path in _migrated and path.exists():
+        return connect(path)
+    conn = init_db(path)
+    _migrated.add(path)
+    return conn
 
 
 def get_conn() -> Iterator[sqlite3.Connection]:

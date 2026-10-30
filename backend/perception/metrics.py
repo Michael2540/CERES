@@ -12,6 +12,8 @@ from datetime import datetime, timedelta
 import cv2
 import numpy as np
 
+from backend.perception import pots
+
 DEFAULT_CHLOROSIS = {"hue_min": 20.0, "hue_max": 45.0, "sat_min": 0.25, "val_min": 0.2}  # hue in degrees
 
 
@@ -98,14 +100,36 @@ def chlorosis_frac(img_bgr: np.ndarray, mask: np.ndarray, band: dict | None = No
     return float(np.count_nonzero(yellow & m) / n)
 
 
-def growth_rate_24h(ts_list: Sequence[datetime], area_list: Sequence[float], at_ts: datetime) -> float | None:
-    """Least-squares slope of ln(area) per day over (at_ts - 24 h, at_ts]; None with < 3 usable points."""
+def growth_rate_24h(
+    ts_list: Sequence[datetime],
+    area_list: Sequence[float],
+    at_ts: datetime,
+    pots_list: Sequence[dict | None] | None = None,
+) -> float | None:
+    """Least-squares slope of ln(area) per day over (at_ts - 24 h, at_ts]; None with < 3 usable points.
+
+    With pots_list (per-point pot -> area_px mappings) the area is the tracked-pot area: only pots holding a
+    plant at BOTH ends of the window count, so a pot emptied inside the window cannot read as negative
+    growth. Points without a mapping are dropped then; None when no pot is tracked."""
     lo = at_ts - timedelta(hours=24)
-    pts = [(t, a) for t, a in zip(ts_list, area_list) if lo < t <= at_ts and a and a > 0]
+    pts = [
+        (t, a, pots_list[k] if pots_list is not None else None)
+        for k, (t, a) in enumerate(zip(ts_list, area_list))
+        if lo < t <= at_ts and a and a > 0
+    ]
+    if pots_list is not None:
+        pts = [p for p in pts if p[2] is not None]
+        if len(pts) < 3:
+            return None
+        tracked = pots.holding(pts[0][2]) & pots.holding(pts[-1][2])
+        if not tracked:
+            return None
+        pts = [(t, sum(p.get(k, 0) for k in tracked), p) for t, _, p in pts]
+        pts = [p for p in pts if p[1] > 0]
     if len(pts) < 3:
         return None
-    x = np.array([(t - at_ts).total_seconds() / 86400.0 for t, _ in pts])
-    y = np.log([a for _, a in pts])
+    x = np.array([(t - at_ts).total_seconds() / 86400.0 for t, _, _ in pts])
+    y = np.log([a for _, a, _ in pts])
     if np.ptp(x) == 0:
         return None
     return float(np.polyfit(x, y, 1)[0])

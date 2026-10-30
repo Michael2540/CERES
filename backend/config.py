@@ -65,6 +65,15 @@ class FaultParams(BaseModel):
     rh_target_pct: float | None = None  # tray L
 
 
+class PotGrid(BaseModel):
+    """The pots of a tray: an even cols x rows split of the tray ROI, with optional per-cell bounds
+    (keys "r,c", 0-based; values x,y,w,h px) overriding the even split where it is off."""
+
+    cols: int = 5
+    rows: int = 4
+    cells: dict[str, tuple[int, int, int, int]] = {}
+
+
 class TrayConfig(BaseModel):
     id: str
     crop: str
@@ -73,6 +82,8 @@ class TrayConfig(BaseModel):
     fault_start: str | None = None
     reference_tray_id: str | None = None
     roi: tuple[int, int, int, int]
+    roi_margin_px: int = 40  # canopy is clipped to the ROI grown by this margin (clamped to the frame)
+    pot_grid: PotGrid = PotGrid()
     cm2_per_px: float
     calib_flag: str
     lamp: Lamp
