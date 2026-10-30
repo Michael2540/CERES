@@ -37,3 +37,5 @@ web/public/fixtures
 data/derived/
 .sam_cache/
 .index.json
+
+web/.next-*

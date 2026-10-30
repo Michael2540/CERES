@@ -380,3 +380,20 @@ def test_catchup_cap_covers_forty_days():
     from backend import app as app_mod
 
     assert app_mod.MAX_CATCHUP_H == 24 * 40
+
+
+def test_fault_start_is_hidden_before_it_happens(api):
+    cfg = {t["id"]: t["fault_start"] for t in get(api, "/trays")["items"]}
+    assert cfg["B"] is not None and cfg["A"] is None
+    early = "2015-12-20T00:00:00Z"
+    assert all(t["fault_start"] is None for t in get(api, "/trays", as_of=early)["items"])
+    assert get(api, "/trays/B", as_of=early)["fault_start"] is None
+    assert get(api, "/trays/B")["fault_start"] == cfg["B"]
+
+
+def test_cors_allows_dashboard_origins(api):
+    for origin in ("http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3100"):
+        r = api.get("/health", headers={"Origin": origin})
+        assert r.headers.get("access-control-allow-origin") == origin
+    r = api.get("/health", headers={"Origin": "http://evil.example"})
+    assert "access-control-allow-origin" not in r.headers

@@ -19,7 +19,7 @@
   "setpoint_caveats": ["Thresholds are author:control-relative; no sourced Arabidopsis setpoints."],
   "missing_evidence": ["Hand moisture reading"],
   "crew_brief": "Tray B is shrinking and yellowing while control A grows; soil moisture is low. Water tray B and re-check in 24 h."},
- "valid": true, "citation_errors": [], "latency_ms": 41200, "recorded": false,
+ "valid": true, "citation_errors": [], "latency_ms": 41200, "cost_usd": 0.09, "recorded": false,
  "model": "muse-spark-1.3-contributor", "provider": "meta",
  "actions": [{"action_id": "act_B_20160103T100500Z", "status": "pending",
               "proposal": {"tray_id": "B", "action": "water", "magnitude": "moderate", "rationale": "Soil moisture falling while control grows.",

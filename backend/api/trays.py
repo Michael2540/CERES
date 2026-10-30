@@ -46,6 +46,11 @@ def latest_frame_id(conn: sqlite3.Connection, tray_id: str, as_of: str) -> str |
     return r["id"] if r else None
 
 
+def visible_fault_start(t: TrayConfig, as_of: datetime) -> str | None:
+    """A fault that starts after as_of is not disclosed yet."""
+    return t.fault_start if t.fault_start and t.fault_start <= iso_z(as_of) else None
+
+
 def summary(
     conn: sqlite3.Connection, t: TrayConfig, as_of: datetime, shared: list[dict] | None = None
 ) -> dict:
@@ -56,7 +61,7 @@ def summary(
         "crop": t.crop,
         "treatment": t.treatment,
         "status": status_of(alerts),
-        "fault_start": t.fault_start,
+        "fault_start": visible_fault_start(t, as_of),
         "reference_tray_id": t.reference_tray_id,
         "badge": deps.BADGES[t.treatment],
         "open_alerts": len(alerts),
@@ -117,7 +122,7 @@ def tray_detail(
         "crop": t.crop,
         "treatment": t.treatment,
         "status": s["status"],
-        "fault_start": t.fault_start,
+        "fault_start": visible_fault_start(t, as_of),
         "reference_tray_id": t.reference_tray_id,
         "age_days": (as_of - DATASET_START).days,
         "mission_day": mission_day(as_of),

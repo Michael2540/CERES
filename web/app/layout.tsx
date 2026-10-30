@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import AgentPanel from "@/components/AgentPanel";
+import Header from "@/components/Header";
+import { MissionProvider } from "@/lib/mission";
 
 export const metadata: Metadata = {
   title: "CERES",
@@ -13,7 +16,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <MissionProvider>
+          <Header />
+          <main className="px-3 py-4 sm:px-4">{children}</main>
+          <AgentPanel />
+        </MissionProvider>
+      </body>
     </html>
   );
 }

@@ -104,6 +104,7 @@ def get_assessment(
         "valid": bool(r["valid"]) if r["valid"] is not None else None,
         "citation_errors": json.loads(r["citation_errors"] or "[]"),
         "latency_ms": r["latency_ms"],
+        "cost_usd": r["cost_usd"],
         "recorded": bool(r["recorded"]),
         "model": r["model"],
         "provider": r["provider"],

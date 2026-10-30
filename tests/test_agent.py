@@ -638,6 +638,7 @@ def test_post_assess_get_and_stream(api, monkeypatch):
     fx = json.loads((FIX / "assessment.json").read_text(encoding="utf-8"))
     assert not shape_errors(body, fx), shape_errors(body, fx)
     assert body["valid"] is True and body["recorded"] is False and body["model"] == "muse-spark-1.3"
+    assert isinstance(body["cost_usd"], float) and body["cost_usd"] >= 0
     assert body["actions"][0]["status"] == "pending" and body["actions"][0]["proposal"]["action"] == "Water tray B"
     assert api.get(f"/assessments/{aid}", params={"as_of": "2016-01-06T10:00:00Z"}).status_code == 404  # later than as_of
 

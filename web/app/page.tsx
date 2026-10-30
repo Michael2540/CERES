@@ -1,42 +1,35 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import AlertFeed from "@/components/AlertFeed";
+import TrayCard from "@/components/TrayCard";
+import { ErrorNote, Loading } from "@/components/ui";
+import { api } from "@/lib/api";
+import { useAsync } from "@/lib/mission";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const FIXTURES = process.env.NEXT_PUBLIC_FIXTURES === "1";
-
-type Health = { status: string; demo_mode: boolean; edge_mode: string };
+const ORDER = ["A", "B", "C", "L"];
 
 export default function Home() {
-  const [health, setHealth] = useState<Health | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const url = FIXTURES ? "/fixtures/health.json" : `${API}/health`;
-    fetch(url)
-      .then((r) => r.json())
-      .then(setHealth)
-      .catch((e) => setError(String(e)));
-  }, []);
-
+  const trays = useAsync((a) => api.trays(a), []);
+  const items = [...(trays.data?.items ?? [])].sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
   return (
-    <main className="mx-auto max-w-3xl p-8">
-      <h1 className="text-3xl font-semibold">CERES</h1>
-      <p className="mt-1 text-sm text-slate-400">
-        Space-farming crop monitor. Plant images are real (ALED, CC BY 4.0); sensors and faults are simulated.
-      </p>
-      <section className="mt-8 rounded-lg border border-slate-700 bg-slate-900 p-4" data-testid="health">
-        <h2 className="text-sm uppercase tracking-wide text-slate-400">
-          Backend health {FIXTURES ? "(fixtures)" : ""}
-        </h2>
-        {health && (
-          <p className="mt-2 font-mono" data-testid="health-status">
-            status={health.status} demo_mode={String(health.demo_mode)} edge_mode={health.edge_mode}
-          </p>
-        )}
-        {error && <p className="mt-2 text-red-400">Backend unreachable: {error}</p>}
-        {!health && !error && <p className="mt-2 text-slate-500">Loading...</p>}
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <section aria-label="Trays">
+        <h1 className="mb-1 text-sm font-semibold uppercase tracking-wider text-slate-400">Trays</h1>
+        <p className="mb-3 text-xs text-slate-500">
+          Real ALED plant images; sensors and faults are simulated, and every card says which.
+        </p>
+        {trays.error && <ErrorNote error={trays.error} retry={trays.reload} />}
+        {!trays.data && trays.loading && <Loading what="Loading trays" />}
+        {trays.data && items.length === 0 && <p className="text-sm text-slate-500">No trays configured.</p>}
+        <div className="grid gap-3 sm:grid-cols-2" data-testid="tray-grid">
+          {items.map((t) => (
+            <TrayCard key={t.id} tray={t} />
+          ))}
+        </div>
       </section>
-    </main>
+      <aside aria-label="Alerts">
+        <AlertFeed />
+      </aside>
+    </div>
   );
 }
