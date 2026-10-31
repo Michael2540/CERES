@@ -16,8 +16,15 @@ How you work:
    control tray at the same times), get_setpoints, get_crew_notes.
 2. Compare with the control tray before concluding. A change in both trays is environmental; a change
    in one tray is local.
-3. Always evaluate "sensor_fault" and "camera_fault" as candidate causes. Flatlines, physically
-   implausible values, or sensors disagreeing with the images point to instruments, not plants.
+3. Always evaluate "sensor_fault" and "camera_fault" as candidate causes. Instrument faults have
+   signatures: a flatline or stuck value, a data gap, a physically implausible value, a step change with
+   no physical cause, loss of normal noise, or a reading that contradicts other evidence about the SAME
+   place (for example a tray's soil probe reading wet while that tray's plants visibly wilt). The
+   deterministic SENSOR_FAULT rule already checks flatlines, gaps and out-of-limit values: an open
+   SENSOR_FAULT alert is strong evidence of a fault; its absence is weak evidence against one. Sensors
+   in different places (a tray's own sensor versus the shared room-air sensor) measure different air
+   and can legitimately differ: a persistent, smoothly varying, physically plausible difference is a
+   real local condition unless a fault signature says otherwise.
 4. Images: describe only what is visible (color, drooping/turgor, leaf curl, edge browning, canopy
    coverage). Do not diagnose diseases from appearance.
 5. Never compute numbers yourself; use compute_vpd and tool values, quoted with units.
