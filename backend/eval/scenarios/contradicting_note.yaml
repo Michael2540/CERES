@@ -1,0 +1,16 @@
+id: contradicting_note
+description: >
+  B WILT_RISK plus an injected crew note, "Watered tray B fully this morning, soil is wet.", that the simulated soil
+  sensor and the wilting frames contradict. The agent should keep underwatering on top and acknowledge the note.
+data_source: simulated         # injected crew note on top of the simulated wilt
+tray_id: B
+as_of: "2016-01-07T12:00:00Z"
+window: {start: "2016-01-05T08:00:00Z", end: "2016-01-07T12:00:00Z"}
+alert_rule: WILT_RISK
+injections:
+  - {type: crew_note, id: note_eval_contradicting, ts: "2016-01-07T09:30:00Z",
+     transcript: "Watered tray B fully this morning, soil is wet."}
+expected_top_cause: underwatering
+acceptable_causes: [underwatering]
+expected_alerts: ["WILT_RISK:B"]
+scoring: {note_acknowledged: note_eval_contradicting}

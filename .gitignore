@@ -21,8 +21,10 @@ Thumbs.db
 # CERES
 data/raw/
 data/*.db
+data/*.db-journal
 backend/eval/out/*.json
 !backend/eval/out/area_validation.json
+!backend/eval/out/latest.json
 !backend/eval/out/.gitkeep
 web/.next
 web/node_modules

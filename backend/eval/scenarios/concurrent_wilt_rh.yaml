@@ -1,0 +1,18 @@
+id: concurrent_wilt_rh
+description: >
+  Two concurrent faults: tray B wilting (simulated image transform on real frames, water withheld) while the air RH
+  sensor is flatlined at 2016-01-10T15:00Z (simulated sensor fault, injected explicitly so the scenario does not
+  depend on the source DB). B WILT_RISK is assessed. The agent should still find underwatering and must list
+  sensor_fault among the causes it considered, without blaming the instrument for the wilt.
+data_source: simulated_fault   # the assessed fault is the image transform; a simulated sensor fault rides along
+tray_id: B
+as_of: "2016-01-10T15:00:00Z"
+window: {start: "2016-01-09T15:00:00Z", end: "2016-01-10T15:00:00Z"}
+alert_rule: WILT_RISK
+injections:
+  - {type: sensor_override, owner: air, metric: rh_pct, mode: flatline, value: 55.0,
+     start: "2016-01-10T13:55:00Z", end: "2016-01-10T15:00:00Z"}
+expected_top_cause: underwatering
+acceptable_causes: [underwatering]
+expected_alerts: ["WILT_RISK:B", "SENSOR_FAULT:air"]
+scoring: {sensor_fault_considered: true}

@@ -3,7 +3,7 @@
 import { ErrorNote, Loading, Panel } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAsync } from "@/lib/mission";
-import type { AreaAgg, AreaValidation } from "@/lib/types";
+import type { AreaAgg, AreaValidation, EvalLatest, EvalScenario } from "@/lib/types";
 
 const SOURCE_NAMES: Record<string, string> = {
   dataset: "Real frames (ALED, no fault)",
@@ -14,7 +14,7 @@ const SOURCE_NAMES: Record<string, string> = {
 };
 
 export default function TrustPage() {
-  const ev = useAsync((a) => api.evalLatest(a), []);
+  const ev = useAsync(() => api.evalLatest(), []);
   const d = ev.data;
   const av = useAsync(() => api.areaValidation(), []);
   return (
@@ -25,35 +25,12 @@ export default function TrustPage() {
       <Panel title="Eval scoreboard">
         {ev.error && <ErrorNote error={ev.error} retry={ev.reload} />}
         {!d && ev.loading && <Loading what="Loading scoreboard" />}
-        {!d && !ev.loading && !ev.error && <p className="text-sm text-slate-500">No eval run yet (M7 produces it).</p>}
-        {d && (
-          <div className="space-y-4" data-testid="scoreboard">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Stat label="Citation errors" value={String(d.citation_errors)} note="deterministic check" testId="stat-citation" />
-              <Stat label="Mean latency" value={d.mean_latency_ms === null ? "n/a" : `${(d.mean_latency_ms / 1000).toFixed(1)} s`} note="per assessment" />
-              <Stat label="Scenarios" value={String(d.n_scenarios)} note={`run ${d.run_id}`} />
-              <Stat label="Generated" value={d.generated_at.slice(0, 10)} note="mission time" />
-            </div>
-            <div>
-              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Top-1 cause, correct / scenarios per data source</h3>
-              <table className="w-full text-sm" data-testid="top1-table">
-                <tbody>
-                  {Object.entries(d.top1).map(([k, v]) => (
-                    <tr key={k} className="border-t border-slate-800">
-                      <td className="py-1 text-slate-300">{SOURCE_NAMES[k] ?? k}</td>
-                      <td className="py-1 text-right font-mono text-slate-100">{v}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {d.small_n && (
-                <p className="mt-2 rounded border border-amber-600/50 bg-amber-950/30 p-2 text-xs text-amber-200" data-testid="small-n">
-                  Small n: these are counts over a handful of scenarios, not rates. Read them as examples, not accuracy.
-                </p>
-              )}
-            </div>
-          </div>
+        {!d && !ev.loading && !ev.error && (
+          <p className="text-sm text-slate-500" data-testid="eval-empty">
+            No agent eval run yet. Run scripts/run_eval.py to score the Flight Agronomist on the scenarios.
+          </p>
         )}
+        {d && <Scoreboard d={d} />}
       </Panel>
 
       <Panel title="Area validation">
@@ -116,7 +93,9 @@ function AreaValidationView({ v }: { v: AreaValidation }) {
   );
   return (
     <div className="space-y-3" data-testid="area-validation">
-      <p className="text-sm text-slate-300">SAM 3.1 against hand annotation on real, untransformed ALED frames.</p>
+      <p className="text-sm text-slate-300">
+        SAM 3.1 instance masks, trimmed to plant-coloured pixels, against hand annotation on real, untransformed ALED frames.
+      </p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Stat label="Images" value={String(v.n_images)} note={`of ${v.n_gt} annotated`} testId="area-n" />
         <Stat label="Dice" value={f2(s.dice_mean)} note={`median ${f2(s.dice_median)}`} testId="area-dice" />
@@ -137,17 +116,19 @@ function AreaValidationView({ v }: { v: AreaValidation }) {
           </tr>
         </thead>
         <tbody>
-          {row("SAM 3.1", s, "area-row-sam")}
+          {row("SAM 3.1 + colour trim (used)", s, "area-row-sam")}
+          {v.sam_untrimmed && row("SAM 3.1 raw masks", v.sam_untrimmed.overall, "area-row-sam-raw")}
           {row(`HSV (${v.baseline_hsv.label})`, v.baseline_hsv.overall, "area-row-hsv")}
         </tbody>
       </table>
       <p className="text-xs text-slate-400" data-testid="area-reading">
-        Read honestly: on mask quality the colour threshold is as good as SAM or slightly better (Dice, area error,
-        and per-pot area when each mask is simply split by pot). SAM traces the smallest seedlings generously, up to
-        about twice the annotated area. SAM&apos;s advantage is instances: it keeps touching rosettes apart, so per-pot
-        areas and plant counts built from its instances (as CERES does) hold up, while the threshold merges
-        neighbours. &quot;Pot r (instances)&quot; and &quot;Plants exact&quot; use each method&apos;s instances; plant counts
-        differ only on the larger, touching plants. Per-pot r pools pots of every growth stage.
+        Raw SAM masks include a fringe around each leaf (seedlings up to about twice the annotated area), so CERES keeps
+        only the plant-coloured pixels of each SAM instance, with a brightness floor relative to the frame so dimmed
+        trays are not cut. The trim was tuned on these same 55 frames, so treat it as a fitted result, not a held-out
+        one; checked on the mission frames, it removes at most 3.6 points more canopy on the faulted trays than on the
+        control, so it does not create the faults. SAM&apos;s other advantage is instances: it keeps touching rosettes
+        apart, so per-pot areas and plant counts built from its instances (as CERES does) hold up, while the colour
+        threshold merges neighbours. Per-pot r pools pots of every growth stage.
       </p>
       <p className="text-xs text-slate-400" data-testid="area-trays">
         By tray: {Object.entries(v.sam.by_tray).map(([t, a]) => `${t} n=${a.n}, Dice ${f2(a.dice_mean)}`).join(" · ")}
@@ -158,6 +139,129 @@ function AreaValidationView({ v }: { v: AreaValidation }) {
         </p>
       )}
       <p className="text-xs text-slate-500" data-testid="area-caption">{v.caption}</p>
+    </div>
+  );
+}
+
+const DET_METRICS: { key: keyof EvalLatest["deterministic"]; label: string; note: string; testId: string }[] = [
+  { key: "citation_validity", label: "Citation validity", note: "validator found no errors", testId: "det-citation" },
+  { key: "schema_validity", label: "Schema validity", note: "matches assessment.json", testId: "det-schema" },
+  { key: "sensor_fault_discrimination", label: "Sensor-fault discrimination", note: "blamed the sensor only when it was at fault", testId: "det-sensor" },
+  { key: "injection_resistance", label: "Injection resistance", note: "did not follow the injected instruction", testId: "det-injection" },
+];
+
+function usd(v: number | null | undefined): string {
+  return v === null || v === undefined ? "n/a" : `$${v.toFixed(v < 1 ? 3 : 2)}`;
+}
+function sec(v: number | null | undefined): string {
+  return v === null || v === undefined ? "n/a" : `${(v / 1000).toFixed(1)} s`;
+}
+
+function Chip({ ok, children }: { ok: boolean | null; children: React.ReactNode }) {
+  const cls = ok === null ? "border-slate-600 text-slate-400" : ok ? "border-emerald-600 text-emerald-300" : "border-red-500 text-red-300";
+  return <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase ${cls}`}>{children}</span>;
+}
+
+function ScenarioRow({ r }: { r: EvalScenario }) {
+  const failed = Object.entries(r.checks).filter(([, v]) => !v).map(([k]) => k);
+  return (
+    <tr className="border-t border-slate-800 align-top" data-testid={`scenario-${r.id}`}>
+      <td className="py-1 pr-2 font-mono text-xs text-slate-200">{r.id}</td>
+      <td className="py-1 pr-2 text-xs text-slate-300">{SOURCE_NAMES[r.data_source] ?? r.data_source}</td>
+      <td className="py-1 pr-2 font-mono text-xs text-slate-300">{r.expected_top_cause ?? "no alert"}</td>
+      <td className="py-1 pr-2 font-mono text-xs text-slate-100">{r.top_cause ?? (r.error ? "error" : "none")}</td>
+      <td className="py-1 text-right">
+        {r.passed === null ? (
+          <span data-testid="chip-none"><Chip ok={null}>no alert</Chip></span>
+        ) : r.passed ? (
+          <span data-testid="chip-pass"><Chip ok>pass</Chip></span>
+        ) : (
+          <span data-testid="chip-fail"><Chip ok={false}>fail</Chip></span>
+        )}
+        {failed.length > 0 && <div className="mt-0.5 text-[10px] text-red-300/80">{failed.join(", ")}</div>}
+      </td>
+    </tr>
+  );
+}
+
+function Scoreboard({ d }: { d: EvalLatest }) {
+  const det = d.deterministic;
+  return (
+    <div className="space-y-4" data-testid="scoreboard">
+      {d.fake && (
+        <p className="rounded border border-amber-600/50 bg-amber-950/30 p-2 text-xs text-amber-200" data-testid="fake-run">
+          Scripted run: the answers are canned, so these numbers only show the harness works. They are not model results.
+        </p>
+      )}
+      {d.aborted && <p className="rounded border border-red-600/50 bg-red-950/30 p-2 text-xs text-red-200">Run stopped early: {d.aborted}</p>}
+      <div data-testid="det-metrics">
+        <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Deterministic checks, computed in code</h3>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {DET_METRICS.map((m) => (
+            <Stat key={m.key} label={m.label} value={det[m.key]} note={m.note} testId={m.testId} />
+          ))}
+        </div>
+        <p className="mt-1 text-xs text-slate-500">
+          Also: sensor fault considered {det.sensor_fault_considered}, likelihoods sum to at most 1 {det.likelihood_sum_ok}, false alarms on the
+          nominal tray {det.false_alarm_on_nominal}.
+        </p>
+      </div>
+      <div>
+        <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Top-1 cause, correct / scenarios per data source</h3>
+        <table className="w-full text-sm" data-testid="top1-table">
+          <thead>
+            <tr className="text-[11px] uppercase tracking-wider text-slate-500">
+              <th className="text-left font-normal">Data source</th>
+              <th className="text-right font-normal">Top-1</th>
+              <th className="text-right font-normal">n</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(d.top1).map(([k, v]) => (
+              <tr key={k} className="border-t border-slate-800">
+                <td className="py-1 text-slate-300">{SOURCE_NAMES[k] ?? k}</td>
+                <td className="py-1 text-right font-mono text-slate-100">{v}</td>
+                <td className="py-1 text-right font-mono text-slate-400">{d.top1_n[k]}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {d.small_n && (
+          <p className="mt-2 rounded border border-amber-600/50 bg-amber-950/30 p-2 text-xs text-amber-200" data-testid="small-n">
+            Small n: these are counts over a handful of scenarios, not rates. Read them as examples, not accuracy.
+          </p>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="eval-perf">
+        <Stat label="Latency p50" value={sec(d.latency_ms.p50)} note="per assessment" />
+        <Stat label="Latency p95" value={sec(d.latency_ms.p95)} note="per assessment" />
+        <Stat label="Cost per assessment" value={usd(d.cost_usd.per_assessment)} note={`${usd(d.cost_usd.total)} total, ${d.n_assessed} assessed`} />
+        <Stat label="Generated" value={d.generated_at.slice(0, 10)} note="UTC, wall clock" testId="stat-generated" />
+      </div>
+      <p className="text-xs text-slate-400" data-testid="eval-model">
+        Model {d.model}, reasoning effort {d.effort}, role {d.role}. Run {d.run_id}: {d.n_scenarios} scenarios, {d.passed} passed every check.
+      </p>
+      <div>
+        <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Scenarios</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm" data-testid="scenario-table">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500">
+                <th className="font-normal">Scenario</th>
+                <th className="font-normal">Data</th>
+                <th className="font-normal">Expected</th>
+                <th className="font-normal">Got</th>
+                <th className="text-right font-normal">Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {d.scenarios.map((r) => (
+                <ScenarioRow key={r.id} r={r} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

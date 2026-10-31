@@ -11,7 +11,9 @@ component, so the GT is always split by pot cell (each pixel to the pot `pots.po
   per pot and is fair to a method without instances (the HSV baseline).
 - instances (`inst_pot_*`, `inst_plant_*`): the prediction's instances go through `pots.assign` (centroid rule),
   as production does. A method that merges touching plants into one instance loses here.
-Pooled per-pot r spans every growth stage (small and large pots), so read it with the by_stage numbers.
+The SAM numbers under `sam` are for the production masks: instances cut back to plant-coloured pixels
+(`perception.trim`); `sam_untrimmed` keeps the raw SAM masks for comparison. Instances then go through
+`pots.split_by_pot`, as in production. Pooled per-pot r spans every growth stage (small and large pots), so read it with the by_stage numbers.
 
 The HSV baseline is a colour threshold, not a model. Nothing here writes to the mission DB.
 """
@@ -27,7 +29,7 @@ import cv2
 import numpy as np
 
 from backend.config import ROOT, TrayConfig, TraysConfig
-from backend.perception import metrics, pots
+from backend.perception import metrics, pots, trim
 from backend.perception.sam_client import SAM_MODEL
 
 GT_DIR = ROOT / "data" / "raw" / "aled_gt"
@@ -87,10 +89,15 @@ def clip_mask(tray: TrayConfig, shape: tuple[int, int]) -> np.ndarray:
     return metrics.roi_mask(shape, pots.clip_region(tray, shape))
 
 
-def sam_canopy(rasters: Sequence[np.ndarray], tray: TrayConfig, shape: tuple[int, int]) -> tuple[np.ndarray, list[np.ndarray]]:
-    """(union canopy, clipped instance rasters), exactly as segment.write_masks builds them."""
+def sam_canopy(
+    rasters: Sequence[np.ndarray], tray: TrayConfig, shape: tuple[int, int], img: np.ndarray | None = None
+) -> tuple[np.ndarray, list[np.ndarray]]:
+    """(union canopy, clipped instance rasters), exactly as segment.write_masks builds them: clip to ROI +
+    margin, then (when the frame `img` is given) the colour-gated trim of `perception.trim`."""
     clip = clip_mask(tray, shape)
     clipped = [r & clip for r in rasters]
+    if img is not None:
+        clipped = trim.trim_instances(img, clipped)
     return metrics.union_mask(clipped, shape, None), clipped
 
 
@@ -114,14 +121,17 @@ def gt_pot_rasters(gt: np.ndarray, tray: TrayConfig) -> list[np.ndarray]:
     return out
 
 
-def compare(gt_full: np.ndarray, sam_rasters: Sequence[np.ndarray], tray: TrayConfig) -> dict:
-    """Per-image comparison inside the tray clip region: Dice, IoU, areas, per-pot areas and plant counts."""
+def compare(
+    gt_full: np.ndarray, sam_rasters: Sequence[np.ndarray], tray: TrayConfig, img: np.ndarray | None = None
+) -> dict:
+    """Per-image comparison inside the tray clip region: Dice, IoU, areas, per-pot areas and plant counts.
+    `img` (the frame) switches the colour-gated trim on for the prediction; None scores the raw masks."""
     shape = gt_full.shape
     gt = gt_full & clip_mask(tray, shape)
-    sam, clipped = sam_canopy(sam_rasters, tray, shape)
+    sam, clipped = sam_canopy(sam_rasters, tray, shape, img)
     _, gt_pots = pots.assign(tray, gt_pot_rasters(gt, tray))
     _, pix_pots = pots.assign(tray, gt_pot_rasters(sam, tray))
-    _, inst_pots = pots.assign(tray, clipped)
+    _, inst_pots = pots.assign(tray, pots.split_by_pot(tray, clipped))
     keys = sorted(set(gt_pots) | set(pix_pots) | set(inst_pots))
     return {
         "tray": tray.id,
@@ -211,16 +221,18 @@ def evaluate(
     pairs: Sequence[tuple[str, Path, Path]],
     cfg: TraysConfig,
     rasters_for: Callable[[str, Path], list[np.ndarray] | None],
+    trimmed: bool = False,
 ) -> list[dict]:
     """One `compare` row per pair (+ frame, stem). `rasters_for(stem, jpg)` returns the SAM instance rasters, or
-    None to skip the frame (uncached under --cached-only, or a failed call)."""
+    None to skip the frame (uncached under --cached-only, or a failed call). `trimmed` applies the colour trim."""
     by_id = {t.id: t for t in cfg.trays}
     rows: list[dict] = []
     for stem, jpg, png in pairs:
         rasters = rasters_for(stem, jpg)
         if rasters is None:
             continue
-        rows.append({"frame": frame_id(stem), "stem": stem, **compare(load_gt(png), rasters, by_id[stem[0]])})
+        img = cv2.imread(str(jpg)) if trimmed else None
+        rows.append({"frame": frame_id(stem), "stem": stem, **compare(load_gt(png), rasters, by_id[stem[0]], img)})
     return rows
 
 
@@ -234,16 +246,19 @@ def worst(rows: Sequence[dict], k: int = 3) -> list[dict]:
 
 
 def build_report(
-    rows: Sequence[dict], baseline_rows: Sequence[dict], *, n_gt: int, n_cached: int, n_called: int,
+    rows: Sequence[dict], baseline_rows: Sequence[dict], untrimmed_rows: Sequence[dict] | None = None, *, n_gt: int, n_cached: int, n_called: int,
     cost_usd: float, partial: bool, generated_at: str, worst_overlays: dict[str, str] | None = None,
 ) -> dict:
-    """The committed JSON: aggregates for SAM and the HSV baseline, compact per-image rows, provenance."""
+    """The committed JSON: aggregates for SAM (`sam`: colour-trimmed, the production masks; `sam_untrimmed`: the
+    raw SAM masks) and the HSV baseline, compact per-image rows (trimmed), provenance."""
     ov = worst_overlays or {}
     return {
         "model": SAM_MODEL, "prompt": PROMPT, "caption": CAPTION,
         "n_images": len(rows), "n_gt": n_gt, "n_cached": n_cached, "n_called": n_called,
         "cost_usd": round(cost_usd, 4), "partial": partial, "generated_at": generated_at,
         "sam": breakdowns(rows),
+        **({"sam_untrimmed": breakdowns(untrimmed_rows)} if untrimmed_rows is not None else {}),
+        "trim": {"s_min": trim.TRIM_S_MIN, "v_abs": trim.TRIM_V_ABS, "v_rel": trim.TRIM_V_REL, "close_px": trim.TRIM_CLOSE_PX},
         "baseline_hsv": {"label": BASELINE_LABEL, **breakdowns(baseline_rows)},
         "worst": [{**compact(r), "overlay": ov.get(r["stem"])} for r in worst(rows)],
         "per_image": [compact(r) for r in rows],

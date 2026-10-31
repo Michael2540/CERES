@@ -1,0 +1,13 @@
+id: nominal_A
+description: >
+  Control tray A, real ALED frames with no fault, simulated sensors (CERES sensors are always simulated).
+  No rule should fire for tray A in the window, so nothing is assessed. Scored for false alarms.
+data_source: dataset          # real frames, no fault
+tray_id: A
+as_of: "2016-01-09T12:00:00Z"
+window: {start: "2016-01-03T00:00:00Z", end: "2016-01-09T12:00:00Z"}
+alert_rule: null              # no alert to assess
+expected_top_cause: null
+acceptable_causes: []
+expected_alerts: []
+scoring: {nominal: true}

@@ -1,0 +1,14 @@
+id: wilt_B
+description: >
+  Tray B, water withheld from 2016-01-05T08:00Z. The frames are real ALED frames rewritten by the simulated wilt
+  transform (erosion, yellowing); the soil sensor is simulated. WILT_RISK is open; the agent should find
+  underwatering (dry simulated soil plus shrinking canopy against control tray A).
+data_source: simulated_fault  # image transform on real frames
+tray_id: B
+as_of: "2016-01-07T12:00:00Z"
+window: {start: "2016-01-05T08:00:00Z", end: "2016-01-07T12:00:00Z"}
+alert_rule: WILT_RISK
+expected_top_cause: underwatering
+acceptable_causes: [underwatering]
+expected_alerts: ["WILT_RISK:B"]
+scoring: {}

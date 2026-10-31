@@ -17,6 +17,7 @@ type Mode = {
   assessment: "done" | "running" | "failed" | "404";
   stream: "events" | "abort";
   area: "ok" | "404" | "partial";
+  evalRun: "ok" | "404";
   assessPosts: number;
   clockPosts: number;
   unexpected: string[];
@@ -25,7 +26,7 @@ type Mode = {
 async function mockApi(page: Page, init: Partial<Mode> = {}) {
   const m: Mode = {
     asOf: "2016-01-03T12:00:00Z", assessmentId: null, assessment: "done", stream: "events",
-    area: "ok", assessPosts: 0, clockPosts: 0, unexpected: [], ...init,
+    area: "ok", evalRun: "ok", assessPosts: 0, clockPosts: 0, unexpected: [], ...init,
   };
   const json = (route: Route, body: unknown, status = 200) =>
     route.fulfill({ status, contentType: "application/json", headers: CORS, body: JSON.stringify(body) });
@@ -51,7 +52,9 @@ async function mockApi(page: Page, init: Partial<Mode> = {}) {
       const e = fx("evidence.json")[decodeURIComponent(p.slice("/evidence/".length))];
       return e ? json(route, e) : json(route, { detail: "unknown or future evidence id" }, 404);
     }
-    if (p === "/eval/latest") return json(route, fx("eval_latest.json"));
+    if (p === "/eval/latest") {
+      return m.evalRun === "404" ? json(route, { detail: "no agent eval run yet" }, 404) : json(route, fx("eval_latest.json"));
+    }
     if (p === "/eval/area-validation") {
       return m.area === "404" ? json(route, { detail: "area validation has not been run" }, 404) : json(route, m.area === "partial" ? { ...fx("area_validation.json"), partial: true } : fx("area_validation.json"));
     }
@@ -179,8 +182,8 @@ test("trust page shows the area validation from /eval/area-validation", async ({
   const m = await mockApi(page, { area: "partial" });
   await page.goto("/trust");
   await expect(page.getByTestId("area-n")).toContainText("55");
-  await expect(page.getByTestId("area-dice")).toContainText("0.88");
-  await expect(page.getByTestId("area-mape")).toContainText("29%");
+  await expect(page.getByTestId("area-dice")).toContainText("0.94");
+  await expect(page.getByTestId("area-mape")).toContainText("5%");
   await expect(page.getByTestId("area-pot-r")).toContainText("0.97");
   await expect(page.getByTestId("area-plants")).toContainText("75%");
   await expect(page.getByTestId("area-row-hsv")).toContainText("not a model");
@@ -195,5 +198,49 @@ test("trust page keeps the empty state when the validation report is missing (40
   await expect(page.getByTestId("area-empty")).toBeVisible();
   await expect(page.getByTestId("area-n")).toHaveCount(0);
   await expect(page.getByTestId("scoreboard")).toBeVisible();
+  expect(m.unexpected).toEqual([]);
+});
+
+test("trust scoreboard leads with the deterministic metrics and shows fractions, latency, cost and per-scenario chips", async ({ page }) => {
+  const m = await mockApi(page);
+  await page.goto("/trust");
+  const board = page.getByTestId("scoreboard");
+  await expect(board).toBeVisible();
+  await expect(page.getByTestId("fake-run")).toBeVisible();
+  // the deterministic metrics come first in the DOM, before the top-1 table
+  const order = await board.evaluate((el) => {
+    const q = (id: string) => Array.from(el.querySelectorAll("*")).indexOf(el.querySelector(`[data-testid="${id}"]`) as Element);
+    return [q("det-metrics"), q("top1-table"), q("eval-perf"), q("scenario-table")];
+  });
+  expect(order.every((n) => n >= 0)).toBe(true);
+  expect([...order].sort((a, b) => a - b)).toEqual(order);
+  await expect(page.getByTestId("det-citation")).toContainText("9/9");
+  await expect(page.getByTestId("det-schema")).toContainText("9/9");
+  await expect(page.getByTestId("det-sensor")).toContainText("9/9");
+  await expect(page.getByTestId("det-injection")).toContainText("1/1");
+  await expect(page.getByTestId("top1-table")).toContainText("2/3");
+  await expect(page.getByTestId("top1-table")).toContainText("6/6");
+  await expect(board).not.toContainText("%");
+  await expect(page.getByTestId("small-n")).toBeVisible();
+  await expect(page.getByTestId("eval-perf")).toContainText("p50");
+  await expect(page.getByTestId("eval-perf")).toContainText("p95");
+  await expect(page.getByTestId("eval-perf")).toContainText("$0.099");
+  await expect(page.getByTestId("eval-model")).toContainText("low");
+  await expect(page.getByTestId("stat-generated")).toContainText("UTC");
+  await expect(page.getByTestId("stat-generated")).not.toContainText("mission");
+  const rows = page.getByTestId("scenario-table").locator("tbody tr");
+  await expect(rows).toHaveCount(10);
+  await expect(page.getByTestId("scenario-lowlight_C")).toContainText("underwatering");
+  await expect(page.getByTestId("scenario-lowlight_C").getByTestId("chip-fail")).toBeVisible();
+  await expect(page.getByTestId("scenario-wilt_B").getByTestId("chip-pass")).toBeVisible();
+  expect(m.unexpected).toEqual([]);
+});
+
+test("trust scoreboard shows an empty state when no eval run exists (404)", async ({ page }) => {
+  const m = await mockApi(page, { evalRun: "404" });
+  await page.goto("/trust");
+  await expect(page.getByTestId("eval-empty")).toBeVisible();
+  await expect(page.getByTestId("scoreboard")).toHaveCount(0);
+  await expect(page.getByTestId("area-n")).toContainText("55");
   expect(m.unexpected).toEqual([]);
 });

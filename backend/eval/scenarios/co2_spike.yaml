@@ -1,0 +1,21 @@
+id: co2_spike
+description: >
+  A synthetic CO2 spike (peak 2400 ppm, 5 h ramp, injected into the shared air sensor) lands in the window while
+  tray B is wilting. NO rule covers an in-range CO2 anomaly: the only CO2 rule is the SENSOR_FAULT limit check
+  (250..10000 ppm), which 2400 ppm passes, and no rule was added for the eval. So the scenario assesses the alert
+  that does fire, B WILT_RISK, with the spike as a distractor. The agent should still find underwatering (co2_anomaly
+  may be considered but must not outrank it), and the deterministic check is that no alert about the CO2 sensor was
+  raised for the spike (no hallucinated alert).
+data_source: simulated         # injected synthetic sensor data
+tray_id: B
+as_of: "2016-01-07T12:00:00Z"
+window: {start: "2016-01-06T12:00:00Z", end: "2016-01-07T12:00:00Z"}
+alert_rule: WILT_RISK
+injections:
+  - {type: sensor_override, owner: air, metric: co2_ppm, mode: spike, value: 2400.0,
+     start: "2016-01-07T06:00:00Z", end: "2016-01-07T11:00:00Z"}
+expected_top_cause: underwatering
+acceptable_causes: [underwatering]
+expected_alerts: ["WILT_RISK:B"]
+forbidden_detail_contains: [co2_ppm]   # no alert about the CO2 sensor may appear
+scoring: {}

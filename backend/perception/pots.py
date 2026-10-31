@@ -18,10 +18,17 @@ import numpy as np
 from backend.config import TrayConfig
 
 POT_MIN_PX = 100  # a pot "holds a plant" when its canopy area is at least this many px
+SPLIT_FRAC = 0.25  # an instance is split across pot cells that each hold at least this fraction of its pixels
 
 
 def pot_id(tray_id: str, r: int, c: int) -> str:
     return f"{tray_id}:pot{r}{c}"
+
+
+def _edge(i: int, length: int, n: int) -> int:
+    """First integer pixel offset (from the ROI origin) of cell i: ceil(i * length / n). It is exactly where
+    `pot_of`'s floor((offset) * n / length) steps from i - 1 to i, so bounds and lookup never disagree."""
+    return -(-i * length // n)
 
 
 def pot_bounds(tray: TrayConfig) -> dict[tuple[int, int], tuple[int, int, int, int]]:
@@ -35,8 +42,8 @@ def pot_bounds(tray: TrayConfig) -> dict[tuple[int, int], tuple[int, int, int, i
                 out[(r, c)] = (o[0], o[1], o[0] + o[2], o[1] + o[3])
             else:
                 out[(r, c)] = (
-                    x + round(c * w / g.cols), y + round(r * h / g.rows),
-                    x + round((c + 1) * w / g.cols), y + round((r + 1) * h / g.rows),
+                    x + _edge(c, w, g.cols), y + _edge(r, h, g.rows),
+                    x + _edge(c + 1, w, g.cols), y + _edge(r + 1, h, g.rows),
                 )
     return out
 
@@ -54,6 +61,48 @@ def pot_of(tray: TrayConfig, cx: float, cy: float) -> tuple[int, int]:
     return r, c
 
 
+def pot_labels(tray: TrayConfig, shape: tuple[int, int]) -> np.ndarray:
+    """Frame-sized int array: the flat pot index (r * cols + c) `pot_of` gives each pixel (pixel centres are
+    integer coordinates). Vectorised; per-cell overrides win over the clamped even grid."""
+    g = tray.pot_grid
+    x, y, w, h = tray.roi
+    cols = np.clip(((np.arange(shape[1]) - x) * g.cols) // w, 0, g.cols - 1)
+    rows = np.clip(((np.arange(shape[0]) - y) * g.rows) // h, 0, g.rows - 1)
+    lab = rows[:, None] * g.cols + cols[None, :]
+    for key, o in g.cells.items():
+        r, c = (int(v) for v in key.split(","))
+        lab[o[1] : o[1] + o[3], o[0] : o[0] + o[2]] = r * g.cols + c
+    return lab
+
+
+def split_by_pot(
+    tray: TrayConfig, rasters: list[np.ndarray], split_frac: float = SPLIT_FRAC
+) -> list[np.ndarray]:
+    """Cut an instance that SAM merged across touching rosettes into one raster per pot cell. A cell keeps its
+    part when it holds >= split_frac of the instance's pixels AND >= POT_MIN_PX; every other pixel (small
+    overhangs, below-threshold cells) goes to the qualifying cell holding the most pixels. An instance with
+    fewer than two qualifying cells is returned whole (its centroid rule then applies in `assign`)."""
+    if not rasters:
+        return []
+    g = tray.pot_grid
+    lab = pot_labels(tray, rasters[0].shape)
+    out: list[np.ndarray] = []
+    for m in rasters:
+        cnt = np.bincount(lab[m], minlength=g.rows * g.cols)
+        total = int(cnt.sum())
+        keep = [i for i in np.nonzero(cnt)[0] if cnt[i] >= max(split_frac * total, POT_MIN_PX)]
+        if len(keep) < 2:
+            out.append(m)
+            continue
+        main = max(keep, key=lambda i: cnt[i])
+        for i in keep:
+            part = m & (lab == i)
+            if i == main:
+                part |= m & ~np.isin(lab, keep)
+            out.append(part)
+    return out
+
+
 def clip_region(tray: TrayConfig, shape: tuple[int, int]) -> tuple[int, int, int, int]:
     """ROI grown by roi_margin_px on every side, clamped to the frame, as (x, y, w, h)."""
     x, y, w, h = tray.roi
@@ -66,7 +115,8 @@ def clip_region(tray: TrayConfig, shape: tuple[int, int]) -> tuple[int, int, int
 def assign(
     tray: TrayConfig, rasters: list[np.ndarray]
 ) -> tuple[list[str | None], dict[str, int]]:
-    """Pot id of each (already clipped) instance raster (None when empty), and pot -> union area_px."""
+    """Pot id of each (already clipped) instance raster (None when empty), and pot -> union area_px. Callers pass
+    rasters already cut by `split_by_pot`, so a merged SAM instance no longer empties a neighbouring pot."""
     ids: list[str | None] = []
     union: dict[str, np.ndarray] = {}
     for m in rasters:

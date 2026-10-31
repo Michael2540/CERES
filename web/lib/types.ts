@@ -132,15 +132,80 @@ export type Evidence = {
   source?: PointSource;
 };
 
+/** One scored scenario of the agent eval (backend/eval/score.py `score_scenario`). */
+export type EvalScenario = {
+  id: string;
+  description: string;
+  data_source: string;
+  tray_id: string | null;
+  alert_rule: string | null;
+  as_of: string;
+  expected_top_cause: string | null;
+  acceptable_causes: string[];
+  top_cause: string | null;
+  top1_correct: boolean | null;
+  alert_found: boolean;
+  alert_id: string | null;
+  assessment_id: string | null;
+  assessed: boolean;
+  valid: boolean;
+  citation_errors: string[];
+  schema_valid: boolean | null;
+  likelihood_sum_ok: boolean | null;
+  sensor_fault_considered: boolean | null;
+  sensor_fault_top: boolean;
+  injection_resisted: boolean | null;
+  injection_note: string | null;
+  note_acknowledged: boolean | null;
+  false_alarm: boolean | null;
+  open_alerts: string[];
+  latency_ms: number | null;
+  cost_usd: number;
+  tool_counts: Record<string, number>;
+  n_tool_calls: number;
+  checks: Record<string, boolean>;
+  /** null = nothing to check (an optional alert never fired). */
+  passed: boolean | null;
+  error: string | null;
+};
+
+/** Each value is a fraction string "k/n", never a percentage. */
+export type EvalDeterministic = {
+  citation_validity: string;
+  schema_validity: string;
+  sensor_fault_considered: string;
+  sensor_fault_discrimination: string;
+  injection_resistance: string;
+  likelihood_sum_ok: string;
+  false_alarm_on_nominal: string;
+};
+
+/** GET /eval/latest: the latest agent eval run (static report, not time-gated; generated_at is wall-clock UTC). */
 export type EvalLatest = {
   run_id: string;
   generated_at: string;
+  note: string | null;
+  /** true for a scripted `--fake` run (no model was called). */
+  fake: boolean;
+  role: string;
+  model: string;
+  effort: string;
+  source_db: string;
+  aborted: string | null;
+  ledger_usd: number | null;
   n_scenarios: number;
+  n_assessed: number;
   small_n: boolean;
+  passed: string;
   top1: Record<string, string>;
+  top1_n: Record<string, number>;
+  top1_overall: string;
   citation_errors: number;
   mean_latency_ms: number | null;
-  [k: string]: unknown;
+  deterministic: EvalDeterministic;
+  latency_ms: { p50: number | null; p95: number | null; mean: number | null };
+  cost_usd: { total: number; per_assessment: number | null };
+  scenarios: EvalScenario[];
 };
 
 /** Aggregates of one slice of the area validation (null where undefined, e.g. Pearson r on one image). */
@@ -164,6 +229,9 @@ export type AreaValidation = {
   n_images: number; n_gt: number; n_cached: number; n_called: number; cost_usd: number;
   partial: boolean; generated_at: string;
   sam: AreaBreakdown;
+  /** SAM before the colour trim (present from the trim round on). */
+  sam_untrimmed?: AreaBreakdown;
+  trim?: { s_min: number; v_abs: number; v_rel: number; close_px: number };
   baseline_hsv: AreaBreakdown & { label: string };
   worst: { frame: string; dice: number; overlay: string | null }[];
   per_image: { frame: string; tray: string; dice: number; iou: number; gt_px: number; sam_px: number; gt_plants: number; sam_plants: number; inst_plants?: number }[];

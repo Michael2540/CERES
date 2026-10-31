@@ -160,7 +160,12 @@ export const api = {
       if (e instanceof ApiError && e.status === 404) return null;
       throw e;
     }),
-  evalLatest: (asOf?: string) => get<EvalLatest>("/eval/latest", { as_of: asOf }),
+  /** Static agent-eval report (not as_of-gated); null when no run has written it (404). */
+  evalLatest: () =>
+    get<EvalLatest>("/eval/latest").catch((e) => {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }),
 };
 
 /** Absolute URL for an image path from the API (frame image or overlay). */

@@ -83,9 +83,9 @@ def test_per_pot_pairing_and_counts():
     assert agg["n"] == 1 and agg["plant_exact_frac"] == 1.0 and agg["pot_n"] == 3 and 0 < agg["dice_mean"] < 1
 
 
-def test_merged_instance_scores_per_pixel_but_not_as_instances():
-    """One prediction instance spanning two neighbouring plants (what HSV's closing does to touching rosettes):
-    the pixel split credits both pots; the centroid rule puts all of it in one pot."""
+def test_merged_instance_is_split_by_pot_cell_so_both_plants_count():
+    """One prediction instance spanning two neighbouring plants (what HSV's closing does to touching rosettes,
+    or SAM merging touching rosettes): `pots.split_by_pot` cuts it by cell, so both pots hold a plant."""
     shape = (768, 1024)
     b = pots.pot_bounds(TRAY_A)
     gt = np.zeros(shape, bool)
@@ -95,9 +95,9 @@ def test_merged_instance_scores_per_pixel_but_not_as_instances():
     merged = np.zeros(shape, bool)
     merged[b[(0, 0)][1] + 40 : b[(0, 0)][3] - 40, b[(0, 0)][0] + 40 : b[(0, 1)][2] - 40] = True
     row = va.compare(gt, [merged & gt], TRAY_A)
-    assert row["gt_plants"] == 2 and row["sam_plants"] == 2 and row["inst_plants"] == 1
+    assert row["gt_plants"] == 2 and row["sam_plants"] == 2 and row["inst_plants"] == 2
     agg = va.aggregate([row])
-    assert agg["plant_exact_frac"] == 1.0 and agg["inst_plant_exact_frac"] == 0.0
+    assert agg["plant_exact_frac"] == 1.0 and agg["inst_plant_exact_frac"] == 1.0
 
 
 def test_aggregate_empty_and_breakdowns():

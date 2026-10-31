@@ -1,8 +1,9 @@
 """segment_frames (M2): segment frames that have no canopy mask yet and write masks rows with metrics.
 
-Canopy is clipped to the tray ROI grown by `roi_margin_px` (clamped to the frame). Each plant instance is
-assigned to the pot holding its centroid (`plants` rows, `masks.plant_id`) and the canopy row carries the
-per-pot area in `pots_json` (backend/perception/pots.py).
+Canopy is clipped to the tray ROI grown by `roi_margin_px` (clamped to the frame) and each SAM instance is cut
+back to its plant-coloured pixels (`perception.trim`, which removes SAM's leaf fringe). Each plant instance is
+cut by pot cell when SAM merged touching rosettes (`pots.split_by_pot`), then assigned to the pot holding
+its centroid (`plants` rows, `masks.plant_id`); the canopy row carries the per-pot area in `pots_json` (backend/perception/pots.py).
 
 The SAM cache is keyed on (raw frame sha, fault_hash, prompt, backend), see sam_client.cache_key.
 `recompute_from_cache` rebuilds every masks row from the cache alone, with no model call.
@@ -19,7 +20,7 @@ from pathlib import Path
 import cv2
 
 from backend.config import ROOT, TrayConfig, TraysConfig
-from backend.perception import metrics, pots
+from backend.perception import metrics, pots, trim
 from backend.perception.sam_client import (
     CACHE_DIR,
     ApiBackend,
@@ -35,6 +36,11 @@ from backend.spend import BudgetExceeded, cost_for
 PROMPT = "plant"
 RAW_DIR = ROOT / "data" / "raw" / "aled"
 _COLS = "f.id, f.tray_id, f.ts, f.path, f.cm2_per_px, f.fault_hash"
+
+
+class MissingRaw(RuntimeError):
+    """A derived frame's raw ALED file is missing, so its cache key cannot be built. Never falls back to the
+    derived bytes (a lookup miss there would pay SAM again for a frame that is already cached)."""
 
 
 class CacheMiss(RuntimeError):
@@ -60,11 +66,15 @@ def pending_frames(
 
 def frame_source(frame: sqlite3.Row, raw_dir: Path | None = None) -> tuple[Path, Path | None, str | None]:
     """(image path, raw ALED frame, fault_hash) for cache keying. The raw frame is the same-named file in
-    the dataset folder for a derived frame (fault_hash set); None for a dataset frame (the image is raw)."""
+    the dataset folder for a derived frame (fault_hash set); None for a dataset frame (the image is raw).
+    Raises MissingRaw when a derived frame's raw file is absent: the key would silently change and a paid
+    call would follow."""
     image = ROOT / frame["path"]
     fh = frame["fault_hash"]
     raw = (raw_dir or RAW_DIR) / image.name
-    return image, (raw if fh and raw.is_file() else None), fh
+    if fh and not raw.is_file():
+        raise MissingRaw(f"raw ALED file {raw} of derived frame {frame['id']} is missing; refusing to segment")
+    return image, (raw if fh else None), fh
 
 
 def frame_cache_path(
@@ -78,7 +88,12 @@ def estimate_cost_usd(
     conn: sqlite3.Connection, frames: list[sqlite3.Row], cache_dir: Path = CACHE_DIR
 ) -> float:
     """$ for frames not already in the disk cache, at sam-3.1 prices."""
-    n = sum(1 for f in frames if not frame_cache_path(f, "api", cache_dir).exists())
+    n = 0
+    for f in frames:
+        try:
+            n += not frame_cache_path(f, "api", cache_dir).exists()
+        except MissingRaw:  # never segmented, so never paid
+            pass
     return cost_for("sam-3.1", images=n)
 
 
@@ -91,7 +106,11 @@ def migrate_cache(
     for f in conn.execute(f"SELECT {_COLS} FROM frames f WHERE f.fault_hash IS NOT NULL").fetchall():
         image = ROOT / f["path"]
         for b in backends:
-            new = frame_cache_path(f, b, cache_dir)
+            try:
+                new = frame_cache_path(f, b, cache_dir)
+            except MissingRaw:
+                out["missing"] += b == backends[0]
+                continue
             old = cache_dir / f"{legacy_cache_key(image, PROMPT, b)}.json" if image.is_file() else None
             if new.exists():
                 out["already"] += 1
@@ -109,7 +128,8 @@ def write_masks(conn: sqlite3.Connection, frame: sqlite3.Row, masks: list[Mask],
     img = cv2.imread(str(ROOT / frame["path"]))
     shape = img.shape[:2]
     clip = metrics.roi_mask(shape, pots.clip_region(tray, shape))
-    rasters = [m.raster() & clip for m in masks]
+    # clip, cut each instance back to plant-coloured pixels, then split merged rosettes by pot cell
+    rasters = pots.split_by_pot(tray, trim.trim_instances(img, [m.raster() & clip for m in masks]))
     canopy = metrics.union_mask(rasters, shape, None)
     pot_ids, pot_area = pots.assign(tray, rasters)
     a = metrics.area_px(canopy)
@@ -157,14 +177,18 @@ def segment_frames(
 ) -> dict:
     """Segment frames lacking a canopy row. DB access stays on the event-loop thread; calls run concurrently."""
     frames = pending_frames(conn, trays, as_of)[: limit if limit is not None else None]
-    stats = {"frames": len(frames), "segmented": 0, "cache_hits": 0, "errors": 0, "budget_blocked": 0}
+    stats = {"frames": len(frames), "segmented": 0, "cache_hits": 0, "errors": 0, "budget_blocked": 0, "missing_raw": 0}
     by_id = {t.id: t for t in cfg.trays}
 
     async def one(sem: asyncio.Semaphore, f: sqlite3.Row) -> None:
         async with sem:
-            image, raw, fh = frame_source(f)
             try:
+                image, raw, fh = frame_source(f)
                 masks, hit = await segment_cached(backend, image, PROMPT, cache_dir, raw, fh)
+            except MissingRaw as e:
+                stats["missing_raw"] += 1
+                print(f"skipped {f['id']}: {e}")
+                return
             except BudgetExceeded:
                 stats["budget_blocked"] += 1
                 return
@@ -199,8 +223,13 @@ def recompute_from_cache(
         q += f" WHERE f.tray_id IN ({','.join('?' * len(trays))})"
         args = list(trays)
     frames = conn.execute(q + " ORDER BY f.ts, f.tray_id", args).fetchall()
-    paths = {f["id"]: frame_cache_path(f, backend_name, cache_dir) for f in frames}
-    missing = [fid for fid, p in paths.items() if not p.exists()]
+    paths: dict[str, Path | None] = {}
+    for f in frames:
+        try:
+            paths[f["id"]] = frame_cache_path(f, backend_name, cache_dir)
+        except MissingRaw:
+            paths[f["id"]] = None
+    missing = [fid for fid, p in paths.items() if p is None or not p.exists()]
     if missing:
         raise CacheMiss(f"{len(missing)} of {len(frames)} frames are not cached, e.g. {missing[:3]}")
     backend = ApiBackend(conn) if backend_name == "api" else HsvBackend()  # decode only: no client is built

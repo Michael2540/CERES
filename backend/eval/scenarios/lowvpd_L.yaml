@@ -1,0 +1,14 @@
+id: lowvpd_L
+description: >
+  Tray L under a humidity dome from 2016-01-08T08:00Z. The frames are real ALED frames with no image fault; the
+  dome climate (RH ramping to 92 %) is a simulated sensor series, so the fault is purely sensor-side.
+  LOW_VPD_RISK is open; the agent should find low_vpd from the tray's own temperature and humidity.
+data_source: simulated         # sensor-side fault; the images carry no fault
+tray_id: L
+as_of: "2016-01-09T12:00:00Z"
+window: {start: "2016-01-08T08:00:00Z", end: "2016-01-09T12:00:00Z"}
+alert_rule: LOW_VPD_RISK
+expected_top_cause: low_vpd
+acceptable_causes: [low_vpd]
+expected_alerts: ["LOW_VPD_RISK:L"]
+scoring: {}

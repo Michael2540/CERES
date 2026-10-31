@@ -50,10 +50,13 @@ DIM_LO = (22, 40, 35)  # OpenCV HSV floor of "leaf-ish": dark green that the pla
 ROI_MARGIN_PX = 40  # reference plants within the ROI grown by this margin are shrunk (matches the canopy clip)
 
 
-def plant_mask(img_bgr: np.ndarray, roi: tuple[int, int, int, int] | None = None) -> np.ndarray:
-    """Boolean plant mask (HSV green-to-yellow threshold), restricted to roi = (x, y, w, h) when given."""
+def plant_mask(
+    img_bgr: np.ndarray, roi: tuple[int, int, int, int] | None = None, lo: tuple[int, int, int] = PLANT_LO
+) -> np.ndarray:
+    """Boolean plant mask (HSV green-to-yellow threshold with floor `lo`), restricted to roi = (x, y, w, h)
+    when given. The one colour test shared by the HSV backend, the wilt/erase transforms and the SAM trim."""
     hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
-    m = cv2.inRange(hsv, np.array(PLANT_LO), np.array(PLANT_HI)) > 0
+    m = cv2.inRange(hsv, np.array(lo), np.array(PLANT_HI)) > 0
     if roi is not None:
         x, y, w, h = roi
         keep = np.zeros_like(m)

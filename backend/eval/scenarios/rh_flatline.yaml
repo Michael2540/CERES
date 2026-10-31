@@ -1,0 +1,14 @@
+id: rh_flatline
+description: >
+  The shared air relative-humidity sensor is held flat for 60 min from 2016-01-10T14:00Z (the simulated hub's HOLD
+  command). SENSOR_FAULT is open on the air sensor; the agent should call it sensor_fault, not a plant problem.
+data_source: simulated         # sensor-side fault
+tray_id: air
+as_of: "2016-01-10T15:00:00Z"
+window: {start: "2016-01-10T09:00:00Z", end: "2016-01-10T15:00:00Z"}
+alert_rule: SENSOR_FAULT
+alert_detail_contains: rh_pct  # the air sensor can carry other faults; pick the RH one
+expected_top_cause: sensor_fault
+acceptable_causes: [sensor_fault]
+expected_alerts: ["SENSOR_FAULT:air"]
+scoring: {sensor_fault_considered: true}

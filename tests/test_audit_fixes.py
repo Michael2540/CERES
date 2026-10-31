@@ -93,6 +93,10 @@ def _write(conn, tmp_path, tray_id: str, ts: str, masks: list[Mask]) -> sqlite3.
     _frame(conn, tmp_path, tray_id, ts, 10)
     conn.commit()
     row = conn.execute("SELECT id, tray_id, ts, path, cm2_per_px, fault_hash FROM frames WHERE id = ?", (f"{tray_id}:{ts}",)).fetchone()
+    img = cv2.imread(str(ROOT / row["path"]))
+    for m in masks:  # the colour trim keeps only plant-coloured pixels, so the masks must sit on green
+        img[m.raster()] = (30, 170, 60)
+    cv2.imwrite(str(ROOT / row["path"]), img, [cv2.IMWRITE_JPEG_QUALITY, 100])
     write_masks(conn, row, masks, CFG.by_id(tray_id))
     return row
 

@@ -18,6 +18,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+import cv2
 import numpy as np
 
 from backend.config import ROOT, load_settings, load_trays
@@ -79,6 +80,10 @@ def decode_cached(pairs: list[tuple[str, Path, Path]]) -> dict[str, list[np.ndar
 
 def summary(title: str, agg: dict) -> None:
     o = agg["overall"]
+    sm = agg["by_stage"]["small"]
+    print(f"{title}: small-stage Dice={sm.get('dice_mean')} MAPE={sm.get('area_mape')};"
+          f" instances: pot r={o.get('inst_pot_pearson_r')} plants exact={o.get('inst_plant_exact_frac')}"
+          f" MAE={o.get('inst_plant_mae')}")
     print(f"{title}: n={o['n']} Dice mean={o.get('dice_mean')} median={o.get('dice_median')} min={o.get('dice_min')}"
           f" IoU mean={o.get('iou_mean')} pooled Dice={o.get('pooled_dice')} area r={o.get('area_pearson_r')}"
           f" MAPE={o.get('area_mape')} pot r={o.get('pot_pearson_r')} (n={o.get('pot_n')})"
@@ -128,7 +133,8 @@ def main() -> None:
         cost = total_spend(conn) - before
         print(f"done: {n_called} calls, cost ${cost:.4f}, ledger total ${total_spend(conn):.4f}")
 
-    rows = va.evaluate(pairs, cfg, lambda s, _j: sam.get(s))
+    rows = va.evaluate(pairs, cfg, lambda s, _j: sam.get(s), trimmed=True)
+    raw_rows = va.evaluate(pairs, cfg, lambda s, _j: sam.get(s))  # the same masks without the colour trim
     base_rows = va.evaluate([p for p in pairs if p[0] in sam], cfg, hsv_rasters)
     by_id = {t.id: t for t in cfg.trays}
     ovs: dict[str, str] = {}
@@ -136,16 +142,17 @@ def main() -> None:
         _, jpg, png = next(p for p in pairs if p[0] == r["stem"])
         tray = by_id[r["tray"]]
         gt = va.load_gt(png)
-        canopy, _ = va.sam_canopy(sam[r["stem"]], tray, gt.shape)
+        canopy, _ = va.sam_canopy(sam[r["stem"]], tray, gt.shape, cv2.imread(str(jpg)))
         dst = va.OVERLAY_DIR / f"sam_{r['stem']}.png"
         va.write_overlay(dst, jpg, gt & va.clip_mask(tray, gt.shape), canopy)
         ovs[r["stem"]] = (dst.relative_to(ROOT) if dst.is_relative_to(ROOT) else dst).as_posix()
     partial = a.cached_only or len(rows) < len(pairs)
     report = va.build_report(
-        rows, base_rows, n_gt=len(pairs), n_cached=n_cached, n_called=n_called, cost_usd=cost, partial=partial,
+        rows, base_rows, raw_rows, n_gt=len(pairs), n_cached=n_cached, n_called=n_called, cost_usd=cost, partial=partial,
         generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), worst_overlays=ovs,
     )
-    summary("SAM 3.1", report["sam"])
+    summary("SAM 3.1 (colour-trimmed, production)", report["sam"])
+    summary("SAM 3.1 raw masks (untrimmed)", report["sam_untrimmed"])
     summary("colour-threshold baseline, not a model", report["baseline_hsv"])
     for w in report["worst"]:
         print(f"worst: {w['frame']} Dice={w['dice']} gt={w['gt_px']} sam={w['sam_px']} overlay={w['overlay']}")
