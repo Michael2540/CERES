@@ -42,9 +42,28 @@ class MissionClock:
         self._speed = float(speed)
         self._running = bool(running)
         self._tick = time_fn()
+        self._pending: tuple[datetime, datetime] | None = None  # forward movement not yet taken by take_advance()
+
+    def _note(self, old: datetime, new: datetime) -> None:  # caller holds the lock
+        """Remember forward movement (old, new] for take_advance(); a backward move forgets it."""
+        if new < old:
+            self._pending = None
+        elif new > old:
+            p = self._pending
+            self._pending = (p[0], new) if p and p[1] == old else (old, new)
+
+    def take_advance(self) -> tuple[datetime, datetime] | None:
+        """The (previous, new) as_of span the clock moved forward through since the last call, or None.
+
+        Consumers (the link queue trigger, app.py's background loop) poll this; the clock itself calls nothing."""
+        with self._lock:
+            self._advance()
+            p, self._pending = self._pending, None
+            return p
 
     def _advance(self) -> None:  # caller holds the lock
         t = self._time()
+        before = self._as_of
         if self._running:
             span = (self.end - self._as_of).total_seconds()
             try:
@@ -54,6 +73,7 @@ class MissionClock:
                 self._as_of = self.end
             if self._as_of >= self.end:
                 self._running = False  # the replay is over
+            self._note(before, self._as_of)
         self._tick = t
 
     def now(self) -> datetime:
@@ -91,7 +111,9 @@ class MissionClock:
                     parsed = parse_ts(as_of)
                 except (ValueError, TypeError, OverflowError):
                     raise ValueError(f"bad as_of {as_of!r}") from None
+                old = self._as_of
                 self._as_of = min(max(parsed, self.start), self.end)
+                self._note(old, self._as_of)
             if speed is not None:
                 self._speed = float(speed)
             if running is not None:

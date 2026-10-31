@@ -441,13 +441,19 @@ def run_tool(ctx: ToolContext, name: str, args: dict) -> tuple[dict, list[str]]:
         result = {"error": str(e)}
     except Exception as e:  # noqa: BLE001  malformed model input must never crash the run
         result = {"error": f"{type(e).__name__}: {e}"}
+    log_tool_call(ctx, str(name), args, ids, result)
+    return result, ids
+
+
+def log_tool_call(ctx: ToolContext, name: str, args: dict, ids: list[str], result: dict) -> None:
+    """One tool_log row: args, returned ids and the JSON result the model saw (numeric grounding reads it)."""
     cur = ctx.conn.execute(
-        "INSERT INTO tool_log(assessment_id, round, tool, args, returned_ids) VALUES (?,?,?,?,?)",
-        (ctx.assessment_id, ctx.round, str(name), json.dumps(args, sort_keys=True, default=str), json.dumps(ids)),
+        "INSERT INTO tool_log(assessment_id, round, tool, args, returned_ids, result) VALUES (?,?,?,?,?,?)",
+        (ctx.assessment_id, ctx.round, name, json.dumps(args, sort_keys=True, default=str), json.dumps(ids),
+         json.dumps(result, default=str)),
     )
     ctx.conn.commit()
     ctx.last_log_rowid = cur.lastrowid
-    return result, ids
 
 
 def set_logged_ids(ctx: ToolContext, rowid: int, ids: list[str]) -> None:

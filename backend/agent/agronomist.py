@@ -28,6 +28,7 @@ from typing import Any
 
 import cv2
 
+from backend.agent import grounding
 from backend.agent.llm_client import ChatResult, LLMClient, resolve_role
 from backend.agent.tools import TOOL_SCHEMAS, ToolContext, log_error_call, run_tool, set_logged_ids
 from backend.agent.validate import assessment_schema, validate
@@ -137,8 +138,8 @@ def begin(conn: sqlite3.Connection, alert_id: str, as_of: datetime, role: str = 
         aid = f"{base}_{k}"
     conn.execute(
         "INSERT INTO assessments(id, ts, tray_id, alert_id, model, provider, json, citation_errors, valid,"
-        " latency_ms, cost_usd, recorded, updated_at) VALUES (?,?,?,?,?,?,NULL,NULL,NULL,NULL,0,0,?)",
-        (aid, iso_z(as_of), alert["tray_id"], alert_id, cfg.model, cfg.provider, time.time()),
+        " latency_ms, cost_usd, recorded, updated_at, role) VALUES (?,?,?,?,?,?,NULL,NULL,NULL,NULL,0,0,?,?)",
+        (aid, iso_z(as_of), alert["tray_id"], alert_id, cfg.model, cfg.provider, time.time(), role),
     )
     conn.commit()
     return aid
@@ -362,4 +363,8 @@ def _investigate(
     if errors:
         _supersede(conn, aid)
     conn.commit()
+    try:  # numeric grounding is a WARNING on the row; it never changes validity or the retry logic
+        grounding.store_warnings(conn, aid, assessment, alert)
+    except Exception:
+        log.exception("grounding check failed for %s", aid)
     emit("assessment", {"assessment_id": aid, "valid": not errors, "latency_ms": latency, "recorded": False})

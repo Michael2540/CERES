@@ -29,7 +29,8 @@ CERES runs entirely in software, without hardware:
 | SAM 3.1 measurements | **Real** model output on those frames. The measurement is real; the input fault on B and C is simulated. |
 | Sensors (temperature, RH, CO₂, soil moisture) | **Simulated** by a deterministic sensor hub, including an injected RH-sensor flatline |
 | Agent assessments | **Real** Muse Spark calls. The agent is deliberately not told which inputs are simulated, so it is tested blind. |
-| Mars light delay | **Simulated** (Mars mode, in progress) |
+| Mars link and light delay | **Simulated** (scaled wall-clock seconds; the real one-way delay is 3–22 min) |
+| Edge triage in Mars mode | **Real model output, replayed.** Recorded with `muse-spark-1.3-contributor` through the remote API; it stands in for an on-board model (Muse Glimmer cannot run on our laptop). Nothing is labelled on-board. |
 
 ## Meta Models Used
 
@@ -37,10 +38,10 @@ CERES runs entirely in software, without hardware:
 |---|---|---|
 | `sam-3.1` | Meta Model API | Segments every tray frame into per-plant masks (text prompt "plant"). The masks feed canopy area, greenness and growth metrics. 844 frames segmented, cached so nothing is paid for twice. |
 | `muse-spark-1.3` | Meta Model API | **Flight Agronomist.** A tool-calling agent that investigates alerts across sensor series, canopy metrics and tray images, and returns a strict-JSON assessment. Its citations are validated and it gets one retry. |
-| `muse-spark-1.3-contributor` | Meta Model API | Development and evaluation runs at lower cost |
+| `muse-spark-1.3-contributor` | Meta Model API | Mars-mode edge triage (recorded demo runs and the edge eval), plus development runs at lower cost |
 | Muse Code (`muse` CLI) | Meta's coding agent | Wrote the ALED dataset fetcher (`scripts/fetch_dataset.py`) and reviewed milestones. See [MUSE_CODE.md](MUSE_CODE.md). |
 
-Planned and switchable: the Mars-mode edge model (`EDGE_MODE=recorded|remote_glimmer|spark_contributor`). Muse Glimmer 30B cannot run on our development laptop, so any edge run will be labelled with the model that actually produced it.
+Switchable: the Mars-mode edge model (`EDGE_MODE=recorded|remote_glimmer|spark_contributor`, default `recorded`). Muse Glimmer 30B cannot run on our development laptop, so the demo replays edge runs recorded with `muse-spark-1.3-contributor`, and every badge names that model and says RECORDED. Pointing `remote_glimmer` at a hosted Glimmer endpoint is a config change.
 
 ## Built During the Hackathon
 
@@ -56,7 +57,8 @@ Planned and switchable: the Mars-mode edge model (`EDGE_MODE=recorded|remote_gli
 | Mission-control dashboard (Next.js) with provenance badges, charts, frame scrubber, agent panel | ✅ |
 | Validation of SAM masks against 55 ALED hand-annotated frames, with a colour-threshold baseline (shown on /trust) | ✅ |
 | Evaluation harness: 11 scenarios (faults, sensor and camera failures, a contradicting crew note, prompt injection), deterministic scoring, scoreboard on /trust | ✅ |
-| Mars mode: link delay, on-board triage, Earth-side audit | ⏳ M8 |
+| Mars mode: simulated Earth link (up / delayed / down) with a queue, edge triage (recorded runs by default; the badge names the model that produced them), Earth-side audit computed by code | ✅ |
+| Hallucination checks: every citation must come from the run's own tools; every number in the model's prose must match a value its tools returned (durations against real elapsed times); unbacked claims of crew actions are rejected | ✅ |
 
 ## Demo
 
@@ -102,6 +104,7 @@ Tests: `make test` (backend), `make lint`, `cd web && npx playwright test`.
 - ALED removes plants for destructive sampling every few days. CERES tracks growth per pot so these removals don't read as shrinkage.
 - Thresholds are author-chosen and mostly relative to the control tray. There are no sourced Arabidopsis setpoints.
 - Raw SAM 3.1 masks include a fringe around leaves (area error 29 %; seedlings up to twice the annotated area), so CERES trims each SAM instance to its plant-coloured pixels (Dice 0.94, area error 5 %, vs 0.89 / 16 % for a plain colour threshold). The trim was tuned on the same 55 annotated frames it is scored on, so it is a fitted result. SAM's other advantage is separating touching plants (per-pot area r 0.97 vs 0.24 from each method's instances).
+- Numeric grounding checks that a number exists in the run's evidence, not that it is attached to the right quantity; free-text claims that are not numbers (other than crew actions) are not machine-checked. The agent sometimes computes a ratio itself (correct arithmetic, against its instructions); that shows as a warning.
 - Agent eval (11 scenarios, small n: one instance per fault): 11/11 pass in three consecutive runs (low effort twice, high once). This came after fixes that are all on record in PROGRESS.md: the first run scored 6/9 on top cause, because of flaws in our simulation (tray C's time-warp repeated identical frames), a broken scenario, and a system-prompt rule that treated any two disagreeing sensors as a fault. The scenarios were written before the fixes and their expected causes never changed, but 11/11 is still a score on scenarios we iterated against, not a held-out test.
 - Canopy area in cm² uses a nominal scale (the dataset has no calibration marker). Pixel area is the primary metric.
 

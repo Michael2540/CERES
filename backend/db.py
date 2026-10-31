@@ -45,10 +45,13 @@ CREATE TABLE IF NOT EXISTS alert_events(
 CREATE TABLE IF NOT EXISTS assessments(
   id TEXT PRIMARY KEY, ts TEXT, tray_id TEXT, alert_id TEXT, model TEXT, provider TEXT, json TEXT,
   citation_errors TEXT, valid BOOL, latency_ms INT, cost_usd REAL, recorded BOOL,
-  updated_at REAL NULL  -- heartbeat (unix time) of a running assessment, for the SSE stall check
+  updated_at REAL NULL,  -- heartbeat (unix time) of a running assessment, for the SSE stall check
+  role TEXT NULL,       -- agronomist (NULL on old rows) | edge (Mars-mode triage, backend/link/edge.py)
+  warnings TEXT NULL    -- JSON list of ungrounded numbers (backend/agent/grounding.py)
 );
 CREATE TABLE IF NOT EXISTS tool_log(
-  assessment_id TEXT, round INT, tool TEXT, args TEXT, returned_ids TEXT
+  assessment_id TEXT, round INT, tool TEXT, args TEXT, returned_ids TEXT,
+  result TEXT NULL  -- JSON result the model saw (numeric grounding and the edge recordings read it)
 );
 CREATE TABLE IF NOT EXISTS crew_notes(
   id TEXT PRIMARY KEY, ts TEXT, audio_path TEXT, transcript TEXT, extracted_json TEXT
@@ -57,7 +60,14 @@ CREATE TABLE IF NOT EXISTS actions(
   id TEXT PRIMARY KEY, ts TEXT, tray_id TEXT, assessment_id TEXT, proposal_json TEXT, status TEXT
 );
 CREATE TABLE IF NOT EXISTS link_queue(
-  id TEXT PRIMARY KEY, ts TEXT, kind TEXT, payload TEXT, status TEXT, edge_json TEXT, audit_json TEXT
+  id TEXT PRIMARY KEY, ts TEXT, kind TEXT, payload TEXT, status TEXT, edge_json TEXT, audit_json TEXT,
+  queued_at REAL NULL,            -- wall-clock unix time the item was queued (delay_sim.deliverable)
+  edge_assessment_id TEXT NULL,   -- assessments row (role=edge) of the on-board triage
+  earth_assessment_id TEXT NULL,  -- assessments row (role=agronomist) of the Earth-side run
+  error TEXT NULL
+);
+CREATE TABLE IF NOT EXISTS link_events(  -- every link state change; the last row is the current state
+  id INTEGER PRIMARY KEY AUTOINCREMENT, state TEXT, delay_s REAL, since TEXT, since_wall REAL
 );
 CREATE TABLE IF NOT EXISTS spend(
   id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, role TEXT, provider TEXT, model TEXT,
@@ -96,5 +106,14 @@ def init_db(path: str | Path) -> sqlite3.Connection:
         conn.execute("ALTER TABLE masks ADD COLUMN pots_json TEXT NULL")
     if "updated_at" not in {r[1] for r in conn.execute("PRAGMA table_info(assessments)")}:
         conn.execute("ALTER TABLE assessments ADD COLUMN updated_at REAL NULL")
+    for table, cols in (
+        ("assessments", {"role": "TEXT", "warnings": "TEXT"}),
+        ("tool_log", {"result": "TEXT"}),
+        ("link_queue", {"queued_at": "REAL", "edge_assessment_id": "TEXT", "earth_assessment_id": "TEXT", "error": "TEXT"}),
+    ):
+        have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        for col, typ in cols.items():
+            if col not in have:  # database created before the column existed
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ} NULL")
     conn.commit()
     return conn

@@ -1,1 +1,15 @@
-{"state": "up", "delay_s": 0, "since": "2016-01-03T09:00:00Z"}
+{
+  "state": "delayed",
+  "delay_s": 30.0,
+  "since": "2016-01-07T12:00:00Z",
+  "queue_depth": 1,
+  "simulated": true,
+  "light_delay_note": "Simulated link. The real one-way light delay between Earth and Mars is 3-22 min; the demo uses a scaled delay in wall-clock seconds.",
+  "edge_mode": "recorded",
+  "edge_location": "recorded",
+  "edge_model": "muse-spark-1.3-contributor",
+  "earth_model": "muse-spark-1.3",
+  "edge_recordings": [
+    "alert_B_WILT_RISK_20160106T100000Z"
+  ]
+}

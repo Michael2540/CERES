@@ -39,6 +39,7 @@ All third-party libraries, data, and assets used are listed below with their lic
 | 2026-10-27 | M1–M3: frame ingest, simulated faults on trays B/C, SAM client with cache and budget guard, canopy metrics, simulated sensor hub, rules. |
 | 2026-10-28 | **`sam-3.1`** segmented all 844 frames ($1.95, 0 errors). M3b: pipeline, mission replay clock, read API, alert episodes. |
 | 2026-10-28 | M4: **`muse-spark-1.3`** Flight Agronomist (tools, citation validator, SSE). Live: B wilt alert → valid assessment, underwatering 0.80, $0.094. |
+| 2026-10-31 | M8 Mars mode: simulated link + queue, edge triage on **`muse-spark-1.3-contributor`** (recorded, labelled with the real model), code-computed Earth audit, numeric-grounding and crew-claim hallucination checks (attacked by a Sonnet reviewer; all findings fixed). Edge eval 9/9; agronomist 11/11. Video summary and voice notes cut. |
 | 2026-10-31 | Agent prompt: general sensor-fault signatures (a disagreeing sensor in another place is not a fault). Eval 11/11 in three runs (low x2, high). Eval spend total $9.13. |
 | 2026-10-31 | Perception fixes (SAM colour trim, GT Dice 0.94) and M7 eval harness: 11 scenarios on **`muse-spark-1.3`** at low and high effort, 10/11 pass; a first run at 6/9 was traced to simulation flaws, fixed and kept on record. Eval spend $5.97. |
 | 2026-10-30 | M6: **`sam-3.1`** validated against 55 ALED hand-annotated frames (39 new calls, $0.10) with a colour-threshold baseline; `/eval/area-validation` and the /trust card. |

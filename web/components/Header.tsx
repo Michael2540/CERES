@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMission } from "@/lib/mission";
+import LinkStatus from "./LinkStatus";
 import { Legend, shortTs } from "./ui";
 
 const DAY0 = Date.UTC(2015, 11, 14); // mission day 1 (matches backend/sim/clock.py)
@@ -17,6 +18,7 @@ export default function Header() {
   const nav = [
     ["/", "Overview"],
     ["/tray/B", "Tray B"],
+    ["/mars", "Mars mode"],
     ["/trust", "Trust"],
   ] as const;
   return (
@@ -74,13 +76,7 @@ export default function Header() {
           >
             {spend ? `Meta spend $${spend.total_usd.toFixed(2)} · runtime guard $${spend.budget_usd.toFixed(0)}` : "Meta spend $-- · runtime guard $--"}
           </span>
-          <span
-            className="rounded border border-emerald-600 bg-emerald-950 px-2 py-0.5 text-[11px] font-semibold text-emerald-300"
-            data-testid="link-chip"
-            title="Mars-mode link simulation arrives in M8"
-          >
-            LINK: UP (simulated)
-          </span>
+          <LinkStatus />
           <Legend />
         </div>
       </div>

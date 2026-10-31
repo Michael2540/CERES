@@ -33,4 +33,7 @@ extend-exclude = ["web", "data"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/test_agent_review.py" = ["F811", "F401"]  # reuses the fixtures of test_agent.py by import
+"tests/test_link.py" = ["F811", "F401"]  # same (M8)
+"tests/test_grounding.py" = ["F811", "F401"]
+"tests/test_edge_eval.py" = ["F811", "F401"]
 "backend/api/*" = ["B008"]  # FastAPI idiom: Depends()/Query() in argument defaults

@@ -383,6 +383,21 @@ function PanelBody({ alert }: { alert: AlertItem }) {
             <Empty>No assessment body (the run failed).</Empty>
           ) : (
             <div className="space-y-3">
+              {(result.warnings?.length ?? 0) > 0 && (
+                <section className="rounded border border-amber-600/60 bg-amber-950/30 p-2" data-testid="warnings-note">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-amber-300">Numbers not found in tool outputs</h3>
+                  <p className="mt-0.5 text-[11px] text-amber-200/80">
+                    A note, not an error: these figures in the agent&apos;s text match no tool result of the run. Check them against the evidence.
+                  </p>
+                  <ul className="mt-1 list-disc pl-4 text-xs text-amber-100">
+                    {result.warnings!.map((w, i) => (
+                      <li key={i} data-testid="warning-item">
+                        <span className="font-mono font-semibold">{w.number}</span> in {w.field}: <span className="text-amber-200/80">&ldquo;{w.context}&rdquo;</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
               <section>
                 <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Crew brief</h3>
                 <p className="rounded bg-slate-900 p-2 text-slate-100" data-testid="crew-brief">{a.crew_brief}</p>
@@ -451,7 +466,7 @@ function PanelBody({ alert }: { alert: AlertItem }) {
   );
 }
 
-function Chips({ ids, onClick, prov }: { ids: string[]; onClick: (id: string) => void; prov: Record<string, string> }) {
+export function Chips({ ids, onClick, prov }: { ids: string[]; onClick: (id: string) => void; prov: Record<string, string> }) {
   if (!ids.length) return null;
   return (
     <div className="mt-1 flex flex-wrap gap-1">

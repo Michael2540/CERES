@@ -63,8 +63,8 @@ def resolve_role(role: str) -> RoleConfig:
         mode = load_settings().edge_mode
         if mode == "recorded":
             raise NotImplementedError(
-                "EDGE_MODE=recorded replays data/demo/edge_runs and makes no live call; the recorder/replayer is "
-                "built in M8. Set EDGE_MODE=spark_contributor or remote_glimmer for a live edge call."
+                "EDGE_MODE=recorded replays data/demo/edge_runs and makes no live call (M8: backend.link.edge.triage "
+                "handles it before any client exists). Set EDGE_MODE=spark_contributor or remote_glimmer for a live call."
             )
         if mode == "spark_contributor":
             return replace(cfg, provider="meta", model="muse-spark-1.3-contributor", image_cap=1)

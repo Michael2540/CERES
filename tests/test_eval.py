@@ -518,10 +518,9 @@ def test_effort_and_model_override_is_temporary(source_db, tmp_path):
     assert run_fake(source_db, tmp_path, scenarios=synth_scenarios()[:1])["effort"] == "low"  # the production default
 
 
-def test_edge_role_is_not_built(source_db, tmp_path):
-    with pytest.raises(NotImplementedError, match="M8"):
-        run_fake(source_db, tmp_path, scenarios=synth_scenarios()[:1], role="edge")
-    assert re_.main(["--role", "edge", "--dry-run"]) == 2
+def test_edge_role_is_built_in_m8(source_db, tmp_path):
+    """Formerly a guard that --role edge was rejected; the edge eval itself is tested in test_edge_eval.py."""
+    assert re_.main(["--role", "edge", "--dry-run"]) == 0
 
 
 def test_cli_dry_run_and_fake_need_no_real_db(source_db, tmp_path, capsys):

@@ -1,6 +1,51 @@
-{"items": [
-  {"id": "lq_B_20160103T100200Z", "ts": "2016-01-03T10:02:00Z", "kind": "alert_triage", "status": "audited",
-   "edge": {"tray_id": "B", "urgency": "now", "likely_cause": "underwatering", "evidence_ids": ["B:soil_vwc:2016-01-03T10:00:00Z"],
-            "crew_instruction": "Check substrate moisture in tray B and water if dry.", "handoff_note_for_earth": "B shrinking vs control A; soil moisture low."},
-   "audit": {"agree": true, "urgency_delta": 0, "cause_match": true, "notes": "Earth-side assessment concurs with the edge triage."}}
-]}
+{
+  "items": [
+    {
+      "id": "lq_B_WILT_RISK_20160106T100000Z_20160107T120000Z",
+      "ts": "2016-01-07T12:00:00Z",
+      "kind": "assess",
+      "alert_id": "alert_B_WILT_RISK_20160106T100000Z",
+      "tray_id": "B",
+      "as_of": "2016-01-07T12:00:00Z",
+      "status": "audited",
+      "edge_json": {
+        "tray_id": "B",
+        "urgency": "now",
+        "likely_cause": "underwatering",
+        "evidence_ids": [
+          "B:soil_vwc:2016-01-07T12:00:00Z",
+          "alert_B_WILT_RISK_20160106T100000Z"
+        ],
+        "crew_instruction": "Check substrate moisture in tray B and water if dry.",
+        "handoff_note_for_earth": "B shrinking vs control A; soil moisture low."
+      },
+      "edge_valid": true,
+      "edge_assessment_id": "edge_B_20160107T120000Z",
+      "provenance": {
+        "recorded": true,
+        "model": "muse-spark-1.3-contributor",
+        "provider": "meta",
+        "edge_location": "recorded",
+        "badge": "RECORDED · EDGE (muse-spark-1.3-contributor)",
+        "recorded_as_of": "2016-01-07T12:00:00Z"
+      },
+      "citation_errors": [],
+      "grounding": [],
+      "audit_json": {
+        "agree": true,
+        "urgency_delta": 0,
+        "cause_match": true,
+        "edge_cause": "underwatering",
+        "earth_top_cause": "underwatering",
+        "edge_urgency": "now",
+        "earth_status": "alert",
+        "notes": "Edge: now (alert) for underwatering. Earth: alert for underwatering. Cause matches; urgency equal."
+      },
+      "earth_assessment_id": "asmt_B_20160107T120000Z",
+      "deliverable": false,
+      "deliver_in_s": null,
+      "error": null,
+      "perception": "frames segmented before the link dropped"
+    }
+  ]
+}

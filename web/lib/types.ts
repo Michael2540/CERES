@@ -94,6 +94,8 @@ export type Assessment = {
   missing_evidence?: string[];
   crew_brief: string;
 };
+/** A number in free text that no tool result of the run contains. */
+export type Grounding = { field: string; number: string; context: string };
 export type ActionRow = {
   action_id: string;
   status: string;
@@ -107,6 +109,8 @@ export type AssessmentResponse = {
   /** null while the run is still in flight */
   valid: boolean | null;
   citation_errors: string[];
+  /** Ungrounded numbers in the free text (a note, not an error). Absent on older runs. */
+  warnings?: Grounding[];
   latency_ms: number | null;
   recorded: boolean;
   model: string;
@@ -176,6 +180,8 @@ export type EvalDeterministic = {
   sensor_fault_considered: string;
   sensor_fault_discrimination: string;
   injection_resistance: string;
+  /** Absent on runs before numeric grounding existed. */
+  numeric_grounding?: string;
   likelihood_sum_ok: string;
   false_alarm_on_nominal: string;
 };
@@ -235,4 +241,110 @@ export type AreaValidation = {
   baseline_hsv: AreaBreakdown & { label: string };
   worst: { frame: string; dice: number; overlay: string | null }[];
   per_image: { frame: string; tray: string; dice: number; iou: number; gt_px: number; sam_px: number; gt_plants: number; sam_plants: number; inst_plants?: number }[];
+};
+
+// ---- Mars mode (M8) --------------------------------------------------------------------------
+export type LinkState = "up" | "delayed" | "down";
+/** GET/POST /link. The link is simulated; light_delay_note is text only. */
+export type LinkInfo = {
+  state: LinkState;
+  delay_s: number | null;
+  since: string | null;
+  queue_depth: number;
+  simulated: boolean;
+  light_delay_note: string;
+  edge_mode: string;
+  /** "recorded" = a stored response is replayed; "remote_api" = a live API call. No mode runs a model on the habitat computer. */
+  edge_location: "recorded" | "remote_api";
+  /** The model that answers the edge triage (or the model inside the recordings); null when there are none. */
+  edge_model: string | null;
+  /** The Earth-side Flight Agronomist model. */
+  earth_model: string;
+  edge_recordings: string[];
+};
+
+export type EdgeTriage = {
+  tray_id: string;
+  urgency: "now" | "next_check" | "log_only";
+  likely_cause: string;
+  evidence_ids: string[];
+  crew_instruction: string;
+  handoff_note_for_earth: string;
+};
+export type EdgeProvenance = {
+  recorded: boolean;
+  model: string;
+  provider: string;
+  edge_location?: "recorded" | "remote_api";
+  badge?: string;
+  recorded_as_of?: string | null;
+};
+export type Audit = {
+  agree: boolean | null;
+  urgency_delta: number | null;
+  cause_match: boolean | null;
+  edge_cause: string | null;
+  earth_top_cause: string | null;
+  edge_urgency: string | null;
+  earth_status: string | null;
+  notes: string;
+};
+export type QueueStatus = "queued" | "edge_done" | "edge_invalid" | "sent" | "audited" | "failed";
+export type QueueItem = {
+  id: string;
+  ts: string;
+  kind: string;
+  alert_id: string;
+  tray_id: string;
+  as_of: string;
+  status: QueueStatus;
+  edge_json: EdgeTriage | null;
+  edge_valid: boolean | null;
+  edge_assessment_id: string | null;
+  provenance: EdgeProvenance | null;
+  citation_errors: string[];
+  /** null = not evaluated (no answer, or the final reply was unparseable); [] = evaluated, nothing ungrounded. */
+  grounding: Grounding[] | null;
+  audit_json: Audit | null;
+  earth_assessment_id: string | null;
+  deliverable: boolean;
+  deliver_in_s: number | null;
+  error: string | null;
+  perception: string;
+};
+export type DrainPlan = {
+  started: boolean;
+  confirm_required: boolean;
+  link_state: LinkState;
+  item_ids: string[];
+  est_cost_usd: { low: number; high: number };
+  detail: string;
+};
+
+/** GET /eval/latest?role=edge (backend/eval/edge_eval.py). */
+export type EdgeEvalScenario = {
+  id: string;
+  data_source: string;
+  tray_id: string | null;
+  alert_rule: string | null;
+  expected_top_cause?: string | null;
+  likely_cause: string | null;
+  urgency: string | null;
+  top1_correct: boolean | null;
+  numeric_grounding: boolean | null;
+  ungrounded_numbers: Grounding[];
+  provenance: { recorded: boolean; model: string; provider: string } | null;
+  passed: boolean | null;
+  error: string | null;
+};
+export type EdgeEvalLatest = Omit<EvalLatest, "deterministic" | "scenarios"> & {
+  edge_mode?: string;
+  deterministic: {
+    citation_validity: string;
+    schema_validity: string;
+    numeric_grounding: string;
+    injection_resistance: string;
+    urgency_sanity: string;
+  };
+  scenarios: EdgeEvalScenario[];
 };

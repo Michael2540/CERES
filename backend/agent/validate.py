@@ -33,6 +33,43 @@ def assessment_schema() -> dict:
     return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 
 
+def citation_errors(groups, allowed: set[str]) -> list[str]:
+    """Errors for every evidence id in `groups` ((name, rows), ...; each row a dict with evidence_ids) not in `allowed`."""
+    errors: list[str] = []
+    for name, rows in groups:
+        for i, row in enumerate(rows):
+            ids = row.get("evidence_ids") if isinstance(row, dict) else None
+            for eid in ids if isinstance(ids, list) else []:
+                if not isinstance(eid, str):
+                    errors.append(f"citation: {name}[{i}] has a non-string evidence id {eid!r}")
+                elif eid not in allowed:
+                    errors.append(
+                        f"citation: {name}[{i}] cites {eid!r}, which no tool returned in this investigation "
+                        "and is not the alert id"
+                    )
+    return errors
+
+
+@lru_cache(maxsize=1)
+def edge_schema() -> dict:
+    return json.loads(SCHEMA_PATH.with_name("edge.json").read_text(encoding="utf-8"))
+
+
+def validate_edge(edge, assessment_id: str, alert: dict, conn: sqlite3.Connection) -> list[str]:
+    """Schema, citation and tray checks of an edge triage (numeric grounding is separate: grounding.py)."""
+    errors = [
+        f"schema: {'/'.join(str(p) for p in e.path) or '(root)'}: {e.message[:200]}"
+        for e in sorted(Draft202012Validator(edge_schema()).iter_errors(edge), key=lambda e: [str(p) for p in e.path])
+    ]
+    if not isinstance(edge, dict):
+        return errors
+    ids = edge.get("evidence_ids")
+    errors += citation_errors((("edge", [{"evidence_ids": ids}]),), logged_ids(conn, assessment_id) | {alert["id"]})
+    if isinstance(edge.get("tray_id"), str) and edge["tray_id"] != alert["tray_id"]:
+        errors.append(f"tray_id {edge['tray_id']!r} differs from the alerted tray {alert['tray_id']!r}")
+    return errors
+
+
 def norm(s: str) -> str:
     return " ".join(str(s).lower().split())
 
@@ -67,18 +104,10 @@ def validate(
     acts = assessment.get("recommended_actions") if isinstance(assessment.get("recommended_actions"), list) else []
 
     # 1. citations: every evidence id must have been returned by a tool in this run, or be the alert id
-    allowed = logged_ids(conn, assessment_id) | {alert["id"]}
-    for name, rows in (("findings", find), ("probable_causes", causes), ("recommended_actions", acts)):
-        for i, row in enumerate(rows):
-            ids = row.get("evidence_ids") if isinstance(row, dict) else None
-            for eid in ids if isinstance(ids, list) else []:
-                if not isinstance(eid, str):
-                    errors.append(f"citation: {name}[{i}] has a non-string evidence id {eid!r}")
-                elif eid not in allowed:
-                    errors.append(
-                        f"citation: {name}[{i}] cites {eid!r}, which no tool returned in this investigation "
-                        "and is not the alert id"
-                    )
+    errors += citation_errors(
+        (("findings", find), ("probable_causes", causes), ("recommended_actions", acts)),
+        logged_ids(conn, assessment_id) | {alert["id"]},
+    )
 
     # 2. likelihoods
     nums = [

@@ -1,0 +1,537 @@
+{
+  "version": 1,
+  "alert_id": "alert_air_SENSOR_FAULT_20160110T150000Z",
+  "tray_id": "air",
+  "as_of": "2016-01-10T15:00:00Z",
+  "assessment_id": "edge_air_20160110T150000Z",
+  "mode": "spark_contributor",
+  "provider": "meta",
+  "model": "muse-spark-1.3-contributor",
+  "recorded_at": "2026-10-31T13:04:59Z",
+  "cost_usd": 0.0022117,
+  "valid": true,
+  "citation_errors": [],
+  "tool_calls": [
+    {
+      "round": 0,
+      "tool": "get_tray_overview",
+      "args": {
+        "tray_id": "A"
+      },
+      "returned_ids": [
+        "A:area_cm2:2016-01-10T14:54:51Z",
+        "A:growth_rate:2016-01-10T14:54:51Z",
+        "A:exg:2016-01-10T14:54:51Z",
+        "A:chlorosis_frac:2016-01-10T14:54:51Z",
+        "A:soil_vwc:2016-01-10T15:00:00Z",
+        "A:ppfd_est:2016-01-10T15:00:00Z",
+        "air:temp_c:2016-01-10T15:00:00Z",
+        "air:rh_pct:2016-01-10T15:00:00Z",
+        "air:co2_ppm:2016-01-10T15:00:00Z",
+        "A:vpd_kpa:2016-01-10T15:00:00Z",
+        "alert_air_SENSOR_FAULT_20160110T150000Z",
+        "air:rh_pct:2016-01-10T13:55:00Z",
+        "air:rh_pct:2016-01-10T14:55:00Z"
+      ],
+      "result": {
+        "tray_id": "A",
+        "crop": "arabidopsis_thaliana",
+        "hardware": "sensors: soil moisture and light on the tray; temperature, RH and CO2 from the shared room-air sensors",
+        "treatment": "undisclosed",
+        "reference_tray_id": null,
+        "age_days": 27,
+        "mission_day": 28,
+        "latest": [
+          {
+            "id": "A:area_cm2:2016-01-10T14:54:51Z",
+            "metric": "area_cm2",
+            "ts": "2016-01-10T14:54:51Z",
+            "value": 2304.84,
+            "unit": "cm2 (nominal)",
+            "source": "camera"
+          },
+          {
+            "id": "A:growth_rate:2016-01-10T14:54:51Z",
+            "metric": "growth_rate",
+            "ts": "2016-01-10T14:54:51Z",
+            "value": 0.1061934119269457,
+            "unit": "ln(area)/day",
+            "source": "camera"
+          },
+          {
+            "id": "A:exg:2016-01-10T14:54:51Z",
+            "metric": "exg",
+            "ts": "2016-01-10T14:54:51Z",
+            "value": 0.29895562843101736,
+            "unit": "index",
+            "source": "camera"
+          },
+          {
+            "id": "A:chlorosis_frac:2016-01-10T14:54:51Z",
+            "metric": "chlorosis_frac",
+            "ts": "2016-01-10T14:54:51Z",
+            "value": 0.00015185435865396296,
+            "unit": "fraction",
+            "source": "camera"
+          },
+          {
+            "frame_id": "A:2016-01-10T14:54:51Z",
+            "metric": "latest_frame",
+            "ts": "2016-01-10T14:54:51Z",
+            "source": "camera",
+            "note": "call get_frames to view and cite this frame"
+          },
+          {
+            "id": "A:soil_vwc:2016-01-10T15:00:00Z",
+            "metric": "soil_vwc",
+            "ts": "2016-01-10T15:00:00Z",
+            "value": 0.3352,
+            "unit": "m3/m3",
+            "source": "sensor"
+          },
+          {
+            "id": "A:ppfd_est:2016-01-10T15:00:00Z",
+            "metric": "ppfd_est",
+            "ts": "2016-01-10T15:00:00Z",
+            "value": 200.0,
+            "unit": "umol/m2/s",
+            "source": "sensor"
+          },
+          {
+            "id": "air:temp_c:2016-01-10T15:00:00Z",
+            "metric": "temp_c",
+            "ts": "2016-01-10T15:00:00Z",
+            "value": 22.88,
+            "unit": "C",
+            "source": "sensor"
+          },
+          {
+            "id": "air:rh_pct:2016-01-10T15:00:00Z",
+            "metric": "rh_pct",
+            "ts": "2016-01-10T15:00:00Z",
+            "value": 55.0,
+            "unit": "%",
+            "source": "sensor"
+          },
+          {
+            "id": "air:co2_ppm:2016-01-10T15:00:00Z",
+            "metric": "co2_ppm",
+            "ts": "2016-01-10T15:00:00Z",
+            "value": 808.8,
+            "unit": "ppm",
+            "source": "sensor"
+          },
+          {
+            "id": "A:vpd_kpa:2016-01-10T15:00:00Z",
+            "metric": "vpd_kpa",
+            "ts": "2016-01-10T15:00:00Z",
+            "value": 1.2551,
+            "unit": "kPa (air)",
+            "source": "derived"
+          }
+        ],
+        "open_alerts": [],
+        "shared_air_sensor_alerts": [
+          {
+            "id": "alert_air_SENSOR_FAULT_20160110T150000Z",
+            "rule": "SENSOR_FAULT",
+            "severity": "warning",
+            "tray_id": "air",
+            "ts": "2016-01-10T15:00:00Z",
+            "threshold_tag": "sensor_fault:author",
+            "detail": "rh_pct flatline 2016-01-10T13:55:00Z..2016-01-10T14:55:00Z",
+            "evidence_ids": [
+              "air:rh_pct:2016-01-10T13:55:00Z",
+              "air:rh_pct:2016-01-10T14:55:00Z"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "round": 0,
+      "tool": "get_frames",
+      "args": {
+        "timestamps": [
+          "2016-01-10T15:00:00Z"
+        ],
+        "tray_id": "A"
+      },
+      "returned_ids": [
+        "A:2016-01-10T14:54:51Z"
+      ],
+      "result": {
+        "frame_refs": [
+          {
+            "id": "A:2016-01-10T14:54:51Z",
+            "tray_id": "A",
+            "ts": "2016-01-10T14:54:51Z",
+            "source": "camera",
+            "attached": true
+          }
+        ],
+        "note": "Images are attached in the next user message."
+      }
+    },
+    {
+      "round": 1,
+      "tool": "get_sensor_series",
+      "args": {
+        "hours": 6.0,
+        "metric": "rh_pct",
+        "tray_id": "air"
+      },
+      "returned_ids": [
+        "air:rh_pct:2016-01-10T09:05:00Z",
+        "air:rh_pct:2016-01-10T09:15:00Z",
+        "air:rh_pct:2016-01-10T09:20:00Z",
+        "air:rh_pct:2016-01-10T09:30:00Z",
+        "air:rh_pct:2016-01-10T09:40:00Z",
+        "air:rh_pct:2016-01-10T09:45:00Z",
+        "air:rh_pct:2016-01-10T09:55:00Z",
+        "air:rh_pct:2016-01-10T10:05:00Z",
+        "air:rh_pct:2016-01-10T10:10:00Z",
+        "air:rh_pct:2016-01-10T10:20:00Z",
+        "air:rh_pct:2016-01-10T10:30:00Z",
+        "air:rh_pct:2016-01-10T10:35:00Z",
+        "air:rh_pct:2016-01-10T10:45:00Z",
+        "air:rh_pct:2016-01-10T10:50:00Z",
+        "air:rh_pct:2016-01-10T11:00:00Z",
+        "air:rh_pct:2016-01-10T11:10:00Z",
+        "air:rh_pct:2016-01-10T11:15:00Z",
+        "air:rh_pct:2016-01-10T11:25:00Z",
+        "air:rh_pct:2016-01-10T11:35:00Z",
+        "air:rh_pct:2016-01-10T11:40:00Z",
+        "air:rh_pct:2016-01-10T11:50:00Z",
+        "air:rh_pct:2016-01-10T12:00:00Z",
+        "air:rh_pct:2016-01-10T12:05:00Z",
+        "air:rh_pct:2016-01-10T12:15:00Z",
+        "air:rh_pct:2016-01-10T12:25:00Z",
+        "air:rh_pct:2016-01-10T12:30:00Z",
+        "air:rh_pct:2016-01-10T12:40:00Z",
+        "air:rh_pct:2016-01-10T12:50:00Z",
+        "air:rh_pct:2016-01-10T12:55:00Z",
+        "air:rh_pct:2016-01-10T13:05:00Z",
+        "air:rh_pct:2016-01-10T13:15:00Z",
+        "air:rh_pct:2016-01-10T13:20:00Z",
+        "air:rh_pct:2016-01-10T13:30:00Z",
+        "air:rh_pct:2016-01-10T13:35:00Z",
+        "air:rh_pct:2016-01-10T13:45:00Z",
+        "air:rh_pct:2016-01-10T13:55:00Z",
+        "air:rh_pct:2016-01-10T14:00:00Z",
+        "air:rh_pct:2016-01-10T14:10:00Z",
+        "air:rh_pct:2016-01-10T14:20:00Z",
+        "air:rh_pct:2016-01-10T14:25:00Z",
+        "air:rh_pct:2016-01-10T14:35:00Z",
+        "air:rh_pct:2016-01-10T14:45:00Z",
+        "air:rh_pct:2016-01-10T14:50:00Z",
+        "air:rh_pct:2016-01-10T15:00:00Z"
+      ],
+      "result": {
+        "tray_id": "air",
+        "metric": "rh_pct",
+        "unit": "%",
+        "hours": 6.0,
+        "id_format": "air:rh_pct:{ts}",
+        "n_points": 72,
+        "downsampled": true,
+        "ts": [
+          "2016-01-10T09:05:00Z",
+          "2016-01-10T09:15:00Z",
+          "2016-01-10T09:20:00Z",
+          "2016-01-10T09:30:00Z",
+          "2016-01-10T09:40:00Z",
+          "2016-01-10T09:45:00Z",
+          "2016-01-10T09:55:00Z",
+          "2016-01-10T10:05:00Z",
+          "2016-01-10T10:10:00Z",
+          "2016-01-10T10:20:00Z",
+          "2016-01-10T10:30:00Z",
+          "2016-01-10T10:35:00Z",
+          "2016-01-10T10:45:00Z",
+          "2016-01-10T10:50:00Z",
+          "2016-01-10T11:00:00Z",
+          "2016-01-10T11:10:00Z",
+          "2016-01-10T11:15:00Z",
+          "2016-01-10T11:25:00Z",
+          "2016-01-10T11:35:00Z",
+          "2016-01-10T11:40:00Z",
+          "2016-01-10T11:50:00Z",
+          "2016-01-10T12:00:00Z",
+          "2016-01-10T12:05:00Z",
+          "2016-01-10T12:15:00Z",
+          "2016-01-10T12:25:00Z",
+          "2016-01-10T12:30:00Z",
+          "2016-01-10T12:40:00Z",
+          "2016-01-10T12:50:00Z",
+          "2016-01-10T12:55:00Z",
+          "2016-01-10T13:05:00Z",
+          "2016-01-10T13:15:00Z",
+          "2016-01-10T13:20:00Z",
+          "2016-01-10T13:30:00Z",
+          "2016-01-10T13:35:00Z",
+          "2016-01-10T13:45:00Z",
+          "2016-01-10T13:55:00Z",
+          "2016-01-10T14:00:00Z",
+          "2016-01-10T14:10:00Z",
+          "2016-01-10T14:20:00Z",
+          "2016-01-10T14:25:00Z",
+          "2016-01-10T14:35:00Z",
+          "2016-01-10T14:45:00Z",
+          "2016-01-10T14:50:00Z",
+          "2016-01-10T15:00:00Z"
+        ],
+        "v": [
+          54.91,
+          54.78,
+          55.11,
+          55.82,
+          55.0,
+          55.08,
+          54.91,
+          55.41,
+          55.07,
+          55.97,
+          54.31,
+          55.43,
+          54.86,
+          53.98,
+          56.14,
+          55.04,
+          56.04,
+          55.73,
+          54.18,
+          54.67,
+          54.79,
+          54.79,
+          55.35,
+          55.12,
+          54.4,
+          54.66,
+          54.88,
+          54.6,
+          54.98,
+          55.31,
+          55.15,
+          54.79,
+          54.91,
+          54.66,
+          54.89,
+          55.43,
+          55.43,
+          55.43,
+          55.43,
+          55.43,
+          55.43,
+          55.43,
+          55.43,
+          55.0
+        ]
+      }
+    },
+    {
+      "round": 1,
+      "tool": "get_tray_overview",
+      "args": {
+        "tray_id": "A"
+      },
+      "returned_ids": [
+        "A:area_cm2:2016-01-10T14:54:51Z",
+        "A:growth_rate:2016-01-10T14:54:51Z",
+        "A:exg:2016-01-10T14:54:51Z",
+        "A:chlorosis_frac:2016-01-10T14:54:51Z",
+        "A:soil_vwc:2016-01-10T15:00:00Z",
+        "A:ppfd_est:2016-01-10T15:00:00Z",
+        "air:temp_c:2016-01-10T15:00:00Z",
+        "air:rh_pct:2016-01-10T15:00:00Z",
+        "air:co2_ppm:2016-01-10T15:00:00Z",
+        "A:vpd_kpa:2016-01-10T15:00:00Z",
+        "alert_air_SENSOR_FAULT_20160110T150000Z",
+        "air:rh_pct:2016-01-10T13:55:00Z",
+        "air:rh_pct:2016-01-10T14:55:00Z"
+      ],
+      "result": {
+        "tray_id": "A",
+        "crop": "arabidopsis_thaliana",
+        "hardware": "sensors: soil moisture and light on the tray; temperature, RH and CO2 from the shared room-air sensors",
+        "treatment": "undisclosed",
+        "reference_tray_id": null,
+        "age_days": 27,
+        "mission_day": 28,
+        "latest": [
+          {
+            "id": "A:area_cm2:2016-01-10T14:54:51Z",
+            "metric": "area_cm2",
+            "ts": "2016-01-10T14:54:51Z",
+            "value": 2304.84,
+            "unit": "cm2 (nominal)",
+            "source": "camera"
+          },
+          {
+            "id": "A:growth_rate:2016-01-10T14:54:51Z",
+            "metric": "growth_rate",
+            "ts": "2016-01-10T14:54:51Z",
+            "value": 0.1061934119269457,
+            "unit": "ln(area)/day",
+            "source": "camera"
+          },
+          {
+            "id": "A:exg:2016-01-10T14:54:51Z",
+            "metric": "exg",
+            "ts": "2016-01-10T14:54:51Z",
+            "value": 0.29895562843101736,
+            "unit": "index",
+            "source": "camera"
+          },
+          {
+            "id": "A:chlorosis_frac:2016-01-10T14:54:51Z",
+            "metric": "chlorosis_frac",
+            "ts": "2016-01-10T14:54:51Z",
+            "value": 0.00015185435865396296,
+            "unit": "fraction",
+            "source": "camera"
+          },
+          {
+            "frame_id": "A:2016-01-10T14:54:51Z",
+            "metric": "latest_frame",
+            "ts": "2016-01-10T14:54:51Z",
+            "source": "camera",
+            "note": "call get_frames to view and cite this frame"
+          },
+          {
+            "id": "A:soil_vwc:2016-01-10T15:00:00Z",
+            "metric": "soil_vwc",
+            "ts": "2016-01-10T15:00:00Z",
+            "value": 0.3352,
+            "unit": "m3/m3",
+            "source": "sensor"
+          },
+          {
+            "id": "A:ppfd_est:2016-01-10T15:00:00Z",
+            "metric": "ppfd_est",
+            "ts": "2016-01-10T15:00:00Z",
+            "value": 200.0,
+            "unit": "umol/m2/s",
+            "source": "sensor"
+          },
+          {
+            "id": "air:temp_c:2016-01-10T15:00:00Z",
+            "metric": "temp_c",
+            "ts": "2016-01-10T15:00:00Z",
+            "value": 22.88,
+            "unit": "C",
+            "source": "sensor"
+          },
+          {
+            "id": "air:rh_pct:2016-01-10T15:00:00Z",
+            "metric": "rh_pct",
+            "ts": "2016-01-10T15:00:00Z",
+            "value": 55.0,
+            "unit": "%",
+            "source": "sensor"
+          },
+          {
+            "id": "air:co2_ppm:2016-01-10T15:00:00Z",
+            "metric": "co2_ppm",
+            "ts": "2016-01-10T15:00:00Z",
+            "value": 808.8,
+            "unit": "ppm",
+            "source": "sensor"
+          },
+          {
+            "id": "A:vpd_kpa:2016-01-10T15:00:00Z",
+            "metric": "vpd_kpa",
+            "ts": "2016-01-10T15:00:00Z",
+            "value": 1.2551,
+            "unit": "kPa (air)",
+            "source": "derived"
+          }
+        ],
+        "open_alerts": [],
+        "shared_air_sensor_alerts": [
+          {
+            "id": "alert_air_SENSOR_FAULT_20160110T150000Z",
+            "rule": "SENSOR_FAULT",
+            "severity": "warning",
+            "tray_id": "air",
+            "ts": "2016-01-10T15:00:00Z",
+            "threshold_tag": "sensor_fault:author",
+            "detail": "rh_pct flatline 2016-01-10T13:55:00Z..2016-01-10T14:55:00Z",
+            "evidence_ids": [
+              "air:rh_pct:2016-01-10T13:55:00Z",
+              "air:rh_pct:2016-01-10T14:55:00Z"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "responses": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "RH flatline alert \u2014 I'll pull the sensor trace to triage.",
+        "tool_calls": [
+          {
+            "id": "call_9a443220-aa29-4f64-901b-75ee9580e53c",
+            "type": "function",
+            "function": {
+              "name": "get_sensor_series",
+              "arguments": "{\"hours\":6.0,\"metric\":\"rh_pct\",\"tray_id\":\"air\"}"
+            }
+          },
+          {
+            "id": "call_3ea509f2-d172-495f-97fa-b23a88472c43",
+            "type": "function",
+            "function": {
+              "name": "get_tray_overview",
+              "arguments": "{\"tray_id\":\"A\"}"
+            }
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 2578,
+        "output_tokens": 634
+      },
+      "cost_usd": 0.0003846,
+      "model": "muse-spark-1.3-contributor"
+    },
+    {
+      "message": {
+        "role": "assistant",
+        "content": "{\"tray_id\":\"A\",\"urgency\":\"next_check\",\"alert_id\":\"alert_air_SENSOR_FAULT_20160110T150000Z\",\"sensor_fault\":true,\"evidence_ids\":[\"alert_air_SENSOR_FAULT_20160110T150000Z\",\"air:rh_pct:2016-01-10T15:00:00Z\",\"A:vpd_kpa:2016-01-10T15:00:00Z\",\"A:soil_vwc:2016-01-10T15:00:00Z\",\"A:chlorosis_frac:2016-01-10T14:54:51Z\",\"A:growth_rate:2016-01-10T14:54:51Z\",\"A:ppfd_est:2016-01-10T15:00:00Z\"],\"summary\":\"Shared air RH stuck exactly constant ~1h, blinding RH/VPD monitoring, but tray soil, light, growth and canopy look normal with no wilting or chlorosis, so no immediate crop loss.\",\"crew_instruction\":\"At next routine check inspect shared air RH sensor cable/connector and confirm RH is updating again; no watering, lamp or fan change needed.\"}"
+      },
+      "usage": {
+        "input_tokens": 4503,
+        "output_tokens": 1257
+      },
+      "cost_usd": 0.0007017,
+      "model": "muse-spark-1.3-contributor"
+    },
+    {
+      "message": {
+        "role": "assistant",
+        "content": "{\"crew_instruction\":\"At next routine check inspect shared air RH sensor cable and confirm readings update; no watering or lamp change needed.\",\"evidence_ids\":[\"alert_air_SENSOR_FAULT_20160110T150000Z\",\"air:rh_pct:2016-01-10T15:00:00Z\",\"A:vpd_kpa:2016-01-10T15:00:00Z\",\"A:soil_vwc:2016-01-10T15:00:00Z\",\"A:chlorosis_frac:2016-01-10T14:54:51Z\",\"A:growth_rate:2016-01-10T14:54:51Z\"],\"handoff_note_for_earth\":\"Shared RH flatline 13:55-14:55Z flagged SENSOR_FAULT; tray A canopy and soil normal, VPD derived from suspect RH.\",\"likely_cause\":\"sensor_fault\",\"tray_id\":\"A\",\"urgency\":\"next_check\"}"
+      },
+      "usage": {
+        "input_tokens": 4125,
+        "output_tokens": 940
+      },
+      "cost_usd": 0.0006005,
+      "model": "muse-spark-1.3-contributor"
+    },
+    {
+      "message": {
+        "role": "assistant",
+        "content": "{\"crew_instruction\":\"At next routine check inspect shared air RH sensor cable and confirm readings update; no watering or lamp change needed.\",\"evidence_ids\":[\"alert_air_SENSOR_FAULT_20160110T150000Z\",\"air:rh_pct:2016-01-10T15:00:00Z\",\"A:vpd_kpa:2016-01-10T15:00:00Z\",\"A:soil_vwc:2016-01-10T15:00:00Z\",\"A:chlorosis_frac:2016-01-10T14:54:51Z\"],\"handoff_note_for_earth\":\"Shared RH flatline 13:55-14:55Z flagged SENSOR_FAULT; tray canopy and soil normal, VPD derived from suspect RH.\",\"likely_cause\":\"sensor_fault\",\"tray_id\":\"air\",\"urgency\":\"next_check\"}"
+      },
+      "usage": {
+        "input_tokens": 4389,
+        "output_tokens": 430
+      },
+      "cost_usd": 0.0005249,
+      "model": "muse-spark-1.3-contributor"
+    }
+  ]
+}

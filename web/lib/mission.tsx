@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
-import type { AlertItem, Clock, Spend } from "./types";
+import type { AlertItem, Clock, LinkInfo, Spend } from "./types";
 
 export type Focus = { trayId: string; frameId?: string; ts?: string; evidenceId: string; metric?: string; nonce: number };
 
@@ -19,6 +19,13 @@ type Mission = {
   openPanel: (a: AlertItem | null) => void;
   focus: Focus | null;
   setFocus: (f: Omit<Focus, "nonce"> | null) => void;
+  /** Simulated Earth link (null until the first read; linkError when /link is unreachable). */
+  link: LinkInfo | null;
+  linkError: string | null;
+  /** Re-read /link now, optionally with a fresh value from a POST, and tell queue views to refetch. */
+  refreshLink: (fresh?: LinkInfo) => void;
+  /** Bumps on every link change or queue action; queue views refetch on it. */
+  queueRev: number;
 };
 
 const Ctx = createContext<Mission | null>(null);
@@ -29,6 +36,9 @@ export function MissionProvider({ children }: { children: React.ReactNode }) {
   const [spend, setSpend] = useState<Spend | null>(null);
   const [panelAlert, openPanel] = useState<AlertItem | null>(null);
   const [focus, setFocusState] = useState<Focus | null>(null);
+  const [link, setLink] = useState<LinkInfo | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [queueRev, setQueueRev] = useState(0);
 
   // Responses that arrive out of order (an old poll finishing after a newer POST) are dropped.
   const seq = useRef(0);
@@ -93,6 +103,43 @@ export function MissionProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // The link is time-gated by as_of like everything else; polled every 4 s because a delayed link elapses in wall seconds.
+  const asOfNow = clock?.as_of;
+  const asOfLink = useRef(asOfNow);
+  useEffect(() => {
+    asOfLink.current = asOfNow;
+  });
+  const linkSeq = useRef(0);
+  const refreshLink = useCallback((fresh?: LinkInfo) => {
+    setQueueRev((n) => n + 1);
+    if (fresh) {
+      linkSeq.current++;
+      setLink(fresh);
+      setLinkError(null);
+      return;
+    }
+    const a = asOfLink.current;
+    if (!a) return;
+    const mine = ++linkSeq.current;
+    api
+      .link(a)
+      .then((l) => {
+        if (mine === linkSeq.current) {
+          setLink(l);
+          setLinkError(null);
+        }
+      })
+      .catch((e) => mine === linkSeq.current && setLinkError(e instanceof Error ? e.message : String(e)));
+  }, []);
+  useEffect(() => {
+    if (hourKey) refreshLink();
+  }, [hourKey, refreshLink]);
+  useEffect(() => {
+    if (!hourKey) return;
+    const t = setInterval(() => refreshLink(), 4000);
+    return () => clearInterval(t);
+  }, [hourKey, refreshLink]);
+
   const nonce = useRef(0);
   const setFocus = useCallback((f: Omit<Focus, "nonce"> | null) => {
     setFocusState(f ? { ...f, nonce: ++nonce.current } : null);
@@ -101,8 +148,9 @@ export function MissionProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<Mission>(
     () => ({
       clock, clockError, asOf: clock?.as_of, hourKey, setClock, spend, refreshSpend, panelAlert, openPanel, focus, setFocus,
+      link, linkError, refreshLink, queueRev,
     }),
-    [clock, clockError, hourKey, setClock, spend, refreshSpend, panelAlert, focus, setFocus],
+    [clock, clockError, hourKey, setClock, spend, refreshSpend, panelAlert, focus, setFocus, link, linkError, refreshLink, queueRev],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

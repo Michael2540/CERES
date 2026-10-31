@@ -12,8 +12,11 @@ Spend. The temp copy is never the ledger. The LLM client is built on a connectio
 table of the configured DB_PATH), so `check_budget` / CERES_BUDGET_USD see the true total before every call and
 every call is recorded there as it happens. The per-run `--max-cost` cap is checked between scenarios on top.
 
-TODO(M8): the `edge` role (Mars-mode sentinel, scored on edge.json's likely_cause and the same citation validator)
-needs backend/agent edge support from M8. `--role edge` is rejected until then.
+`--role edge` (M8) runs the on-board Edge Sentinel (backend/link/edge.py) on each scenario that has an alert, in the same
+temp DB, and scores it with backend/eval/edge_eval.py (top-1, schema, citations, numeric grounding, injection, urgency
+sanity). It needs a LIVE EDGE_MODE (spark_contributor or remote_glimmer); `recorded` is refused unless --allow-recorded
+(scenarios without a recording then record an error). Reports go to <run_id>.json/.md and latest_edge.json; latest.json
+stays the agronomist's.
 """
 
 from __future__ import annotations
@@ -35,13 +38,15 @@ import cv2
 import numpy as np
 import yaml
 
-from backend.agent import agronomist, llm_client
+from backend.agent import agronomist, grounding, llm_client
 from backend.agent.llm_client import ChatResult, LLMClient
 from backend.agent.validate import assessment_schema
 from backend.api.alerts import visible_alerts
 from backend.config import ROOT, load_settings, load_trays
 from backend.db import connect, init_db
-from backend.eval import score
+from backend.eval import edge_eval, score
+from backend.link import edge as edge_mod
+from backend.link.delay_sim import LinkState
 from backend.pipeline import run_cycle
 from backend.spend import BudgetExceeded, record_spend
 from backend.timeutil import iso_z, parse_ts
@@ -50,6 +55,8 @@ EVAL_DIR = ROOT / "backend" / "eval"
 SCENARIO_DIR = EVAL_DIR / "scenarios"
 OUT_DIR = EVAL_DIR / "out"
 LATEST_NAME = "latest.json"
+LATEST_EDGE_NAME = "latest_edge.json"
+EST_PER_EDGE_USD = (0.002, 0.02)  # contributor model, $0.10 / $0.20 per M tokens: ~10-20k tokens in, up to 3 calls (estimate)
 EST_PER_ASSESSMENT_USD = (0.10, 0.20)  # PROGRESS.md live measurements: $0.094 and $0.194 per assessment, low effort
 DEFAULT_MAX_COST_USD = 10.0  # per run, on top of CERES_BUDGET_USD; PLAN 0.4b gives all eval runs $35
 INJECTION_TYPES = ("crew_note", "sensor_override", "occlude_frames", "image_label")
@@ -431,8 +438,9 @@ def paid_factory(sc: dict, alert: dict, ledger: sqlite3.Connection | None) -> LL
     return LLMClient(ledger)
 
 
-def fake_factory(cost_per_call: float = 0.0, **kw) -> LLMFactory:
-    return lambda sc, alert, ledger: ScriptedLLM(sc, alert, ledger, cost_per_call, **kw)
+def fake_factory(cost_per_call: float = 0.0, role: str = "agronomist", **kw) -> LLMFactory:
+    cls = edge_eval.ScriptedEdgeLLM if role == "edge" else ScriptedLLM
+    return lambda sc, alert, ledger: cls(sc, alert, ledger, cost_per_call, **kw)
 
 
 # ---------------------------------------------------------------- one scenario
@@ -444,6 +452,53 @@ def _ledger_since(ledger: sqlite3.Connection | None, mark: int) -> float | None:
     if ledger is None:
         return None
     return float(ledger.execute("SELECT COALESCE(SUM(cost_usd), 0) FROM spend WHERE id > ?", (mark,)).fetchone()[0])
+
+
+def _run_agronomist(conn: sqlite3.Connection, alert: dict, as_of: datetime, llm: Any, role: str, rec: dict) -> None:
+    try:
+        aid = agronomist.assess(conn, alert["id"], as_of, role=role, llm=llm)
+    except BudgetExceeded:
+        raise
+    except Exception as exc:  # noqa: BLE001  recorded in the temp DB by agronomist.run; scored as a failure
+        rec["error"] = f"{type(exc).__name__}: {exc}"
+        row = conn.execute("SELECT id FROM assessments WHERE alert_id = ? ORDER BY ts DESC", (alert["id"],)).fetchone()
+        aid = row["id"] if row else None
+    if aid:
+        a = conn.execute("SELECT * FROM assessments WHERE id = ?", (aid,)).fetchone()
+        parsed = json.loads(a["json"]) if a["json"] else None
+        rec.update(
+            assessment_id=aid, assessment=parsed,
+            errors=json.loads(a["citation_errors"] or "[]"), latency_ms=a["latency_ms"], cost_usd=a["cost_usd"] or 0.0,
+            tool_counts={r["tool"]: r["n"] for r in conn.execute(
+                "SELECT tool, COUNT(*) AS n FROM tool_log WHERE assessment_id = ? GROUP BY tool", (aid,))},
+        )
+        if parsed is not None:  # computed here: the tool results live in the temp DB, which is deleted afterwards
+            rec["grounding_errors"] = grounding.check(conn, aid, alert, grounding.assessment_texts(parsed))
+
+
+def _run_edge(conn: sqlite3.Connection, alert: dict, as_of: datetime, llm: Any, rec: dict) -> None:
+    """On-board triage of the scenario's alert in the temp DB (the link is `down`); never calls perception."""
+    rec.update(alert_rule_found=alert["rule"], alert_open=alert["status"] == "open")
+    try:
+        aid = edge_mod.triage(conn, alert["id"], as_of, llm=llm, link=LinkState("down"))
+    except BudgetExceeded:
+        raise
+    except Exception as exc:  # noqa: BLE001  NoRecording, token refusal, model failure: scored as a failure, stated honestly
+        rec["error"] = str(exc) if isinstance(exc, edge_mod.NoRecording) else f"{type(exc).__name__}: {exc}"
+        row = conn.execute(
+            "SELECT id FROM assessments WHERE alert_id = ? AND role = 'edge' ORDER BY rowid DESC", (alert["id"],)
+        ).fetchone()
+        aid = row["id"] if row else None
+    if aid:
+        edge_json, a = edge_mod.edge_result(conn, aid)
+        rec.update(
+            assessment_id=aid, edge=edge_json, errors=json.loads(a["citation_errors"] or "[]"),
+            grounding=json.loads(a["warnings"]) if a["warnings"] else [], latency_ms=a["latency_ms"],
+            cost_usd=a["cost_usd"] or 0.0,
+            provenance={"recorded": bool(a["recorded"]), "model": a["model"], "provider": a["provider"]},
+            tool_counts={r["tool"]: r["n"] for r in conn.execute(
+                "SELECT tool, COUNT(*) AS n FROM tool_log WHERE assessment_id = ? GROUP BY tool", (aid,))},
+        )
 
 
 def run_scenario(
@@ -482,22 +537,10 @@ def run_scenario(
         if alert is not None:
             rec.update(alert_found=True, alert_id=alert["id"])
             llm = llm_factory(sc, alert, ledger)
-            try:
-                aid = agronomist.assess(conn, alert["id"], as_of, role=role, llm=llm)
-            except BudgetExceeded:
-                raise
-            except Exception as exc:  # noqa: BLE001  recorded in the temp DB by agronomist.run; scored as a failure
-                rec["error"] = f"{type(exc).__name__}: {exc}"
-                row = conn.execute("SELECT id FROM assessments WHERE alert_id = ? ORDER BY ts DESC", (alert["id"],)).fetchone()
-                aid = row["id"] if row else None
-            if aid:
-                a = conn.execute("SELECT * FROM assessments WHERE id = ?", (aid,)).fetchone()
-                rec.update(
-                    assessment_id=aid, assessment=json.loads(a["json"]) if a["json"] else None,
-                    errors=json.loads(a["citation_errors"] or "[]"), latency_ms=a["latency_ms"], cost_usd=a["cost_usd"] or 0.0,
-                    tool_counts={r["tool"]: r["n"] for r in conn.execute(
-                        "SELECT tool, COUNT(*) AS n FROM tool_log WHERE assessment_id = ? GROUP BY tool", (aid,))},
-                )
+            if role == "edge":
+                _run_edge(conn, alert, as_of, llm, rec)
+            else:
+                _run_agronomist(conn, alert, as_of, llm, role, rec)
     except BudgetExceeded as exc:
         rec["error"] = f"BudgetExceeded: {exc}"
         info["budget_exceeded"] = True
@@ -507,16 +550,19 @@ def run_scenario(
         conn.close()
         shutil.rmtree(sdir, ignore_errors=True)
     info["ledger_usd"] = _ledger_since(ledger, mark)
-    log(f"  {sc['id']}: " + (rec["error"] or f"alert={rec.get('alert_id')} top={score.top_cause(rec.get('assessment'))}"))
+    top = (rec.get("edge") or {}).get("likely_cause") if role == "edge" else score.top_cause(rec.get("assessment"))
+    log(f"  {sc['id']}: " + (rec["error"] or f"alert={rec.get('alert_id')} top={top}"))
+    if role == "edge":
+        return edge_eval.score_edge(sc, rec), info
     row = score.score_scenario(sc, rec)
     row["assessment"] = rec.get("assessment")  # kept so a paid run can be audited after the temp DB is gone
     return row, info
 
 
 # ---------------------------------------------------------------- the run
-def estimate(scenarios: list[dict]) -> dict:
+def estimate(scenarios: list[dict], role: str = "agronomist") -> dict:
     n = sum(1 for s in scenarios if s.get("alert_rule"))
-    lo, hi = EST_PER_ASSESSMENT_USD
+    lo, hi = EST_PER_EDGE_USD if role == "edge" else EST_PER_ASSESSMENT_USD
     return {"n_scenarios": len(scenarios), "n_assessments": n, "usd_low": round(n * lo, 2), "usd_high": round(n * hi, 2)}
 
 
@@ -537,14 +583,14 @@ def run_eval(
     log: Callable[[str], None] = print,
     scenario_dir: Path = SCENARIO_DIR,
 ) -> dict:
-    if role != "agronomist":
-        raise NotImplementedError("TODO(M8): the edge role needs the M8 edge agent; only 'agronomist' is evaluated")
     now = datetime.now(UTC)
-    run_id = run_id or f"eval_{now.strftime('%Y%m%dT%H%M%SZ')}{'_fake' if fake else ''}"
+    prefix = "eval_edge" if role == "edge" else "eval"
+    run_id = run_id or f"{prefix}_{now.strftime('%Y%m%dT%H%M%SZ')}{'_fake' if fake else ''}"
+    edge_mode = load_settings().edge_mode if role == "edge" else None
     rows: list[dict] = []
     ledger_usd, aborted = 0.0, None
     with role_override(role, effort, model):
-        cfg = llm_client.resolve_role(role)
+        cfg = None if (role == "edge" and edge_mode == "recorded") else llm_client.resolve_role(role)
         work = Path(tempfile.mkdtemp(prefix="ceres_eval_"))
         try:
             for sc in scenarios:
@@ -565,11 +611,12 @@ def run_eval(
         "note": note,
         "fake": fake,
         "role": role,
-        "model": "fake-scripted" if fake else cfg.model,
-        "effort": effort or cfg.reasoning_effort or "default",
+        "model": "fake-scripted" if fake else "recorded (model per recording)" if cfg is None else cfg.model,
+        "effort": effort or (cfg.reasoning_effort if cfg else None) or "default",
+        **({"edge_mode": edge_mode} if role == "edge" else {}),
         "source_db": str(source_db),
         "aborted": aborted,
-        **score.aggregate(rows),
+        **(edge_eval.aggregate_edge(rows) if role == "edge" else score.aggregate(rows)),
         "ledger_usd": None if ledger is None else round(ledger_usd, 6),
         "scenarios": rows,
     }
@@ -578,19 +625,20 @@ def run_eval(
         out_dir.mkdir(parents=True, exist_ok=True)
         text = json.dumps(rep, indent=2)
         (out_dir / f"{run_id}.json").write_text(text, encoding="utf-8")
-        (out_dir / f"{run_id}.md").write_text(score.render_markdown(rep), encoding="utf-8")
+        (out_dir / f"{run_id}.md").write_text(
+            edge_eval.render_markdown_edge(rep) if role == "edge" else score.render_markdown(rep), encoding="utf-8")
         complete = (
             {s["id"] for s in scenarios} >= {s["id"] for s in load_scenarios(scenario_dir)}
             and aborted is None and all(r.get("error") is None for r in rows)
         )
         if (not fake and complete) if update_latest is None else update_latest:
-            (out_dir / LATEST_NAME).write_text(text, encoding="utf-8")
+            (out_dir / (LATEST_EDGE_NAME if role == "edge" else LATEST_NAME)).write_text(text, encoding="utf-8")
     return rep
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--role", default="agronomist", choices=["agronomist", "edge"], help="edge is M8 (not built)")
+    ap.add_argument("--role", default="agronomist", choices=["agronomist", "edge"], help="edge: the Mars-mode Edge Sentinel (needs a live EDGE_MODE)")
     ap.add_argument("--effort", choices=["low", "high"], default=None, help="reasoning_effort for this run only")
     ap.add_argument("--model", default=None, help="override the role's model (e.g. muse-spark-1.3-contributor for dev)")
     ap.add_argument("--scenarios", default=None, help="comma-separated scenario ids (default: all)")
@@ -600,22 +648,27 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--max-cost", type=float, default=DEFAULT_MAX_COST_USD, help="stop the run past this many USD")
     ap.add_argument("--dry-run", action="store_true", help="print the scenario count and estimated cost; no calls")
     ap.add_argument("--fake", action="store_true", help="scripted LLM: free, no network, never touches the ledger")
-    ap.add_argument("--update-latest", action="store_true", help="also write latest.json for a --fake run")
+    ap.add_argument("--update-latest", action="store_true", help="also write latest.json (latest_edge.json for --role edge) for a --fake run")
+    ap.add_argument("--allow-recorded", action="store_true", help="edge role: replay recordings (EDGE_MODE=recorded); scenarios without one fail")
     args = ap.parse_args(argv)
-    if args.role == "edge":
-        print("TODO(M8): the edge role is built in M8; only --role agronomist is evaluated.", file=sys.stderr)
+    if (args.role == "edge" and not args.fake and not args.dry_run and load_settings().edge_mode == "recorded"
+            and not args.allow_recorded):
+        print("error: EDGE_MODE=recorded replays old recordings and would not evaluate a model. Set "
+              "EDGE_MODE=spark_contributor (or remote_glimmer), or pass --allow-recorded to replay what exists.", file=sys.stderr)
         return 2
     try:
         scenarios = load_scenarios(args.scenario_dir, args.scenarios.split(",") if args.scenarios else None)
     except ScenarioError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
-    est = estimate(scenarios)
-    lo, hi = EST_PER_ASSESSMENT_USD
+    est = estimate(scenarios, args.role)
+    lo, hi = EST_PER_EDGE_USD if args.role == "edge" else EST_PER_ASSESSMENT_USD
     print(
         f"{est['n_scenarios']} scenarios, {est['n_assessments']} assessments; estimated "
-        f"${est['usd_low']:.2f} to ${est['usd_high']:.2f} (${lo:.2f} to ${hi:.2f} each, measured at low effort on "
-        f"muse-spark-1.3; high effort is unmeasured and may cost more). Nominal scenarios make no model call."
+        f"${est['usd_low']:.2f} to ${est['usd_high']:.2f} (${lo:.3f} to ${hi:.3f} each, "
+        + ("an unmeasured estimate for the contributor model" if args.role == "edge"
+           else "measured at low effort on muse-spark-1.3; high effort is unmeasured and may cost more")
+        + "). Nominal scenarios make no model call."
     )
     for s in scenarios:
         print(f"  {s['id']:<20} {s['data_source']:<16} {s['alert_rule'] or '-':<13} as_of {s['as_of']}")
@@ -625,7 +678,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.source_db is None:
             print("error: --fake needs --source-db (it never defaults to the real DB)", file=sys.stderr)
             return 2
-        source, ledger, factory = args.source_db, None, fake_factory()
+        source, ledger, factory = args.source_db, None, fake_factory(role=args.role)
         note = None  # the report itself says FAKE RUN
     else:
         settings = load_settings()
@@ -645,7 +698,8 @@ def main(argv: list[str] | None = None) -> int:
             ledger.close()
     d = rep["deterministic"]
     print(f"\n{rep['run_id']}: passed {rep['passed']}, top-1 {rep['top1_overall']}, citation validity {d['citation_validity']}, "
-          f"schema {d['schema_validity']}, injection {d['injection_resistance']}, cost ${rep['cost_usd']['total']:.4f}")
+          f"schema {d['schema_validity']}, grounding {d['numeric_grounding']}, injection {d['injection_resistance']}, "
+          f"cost ${rep['cost_usd']['total']:.4f}")
     if rep["aborted"]:
         print(f"ABORTED: {rep['aborted']}")
     print(f"wrote {Path(args.out_dir) / (rep['run_id'] + '.json')} and .md")

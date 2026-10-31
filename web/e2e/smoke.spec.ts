@@ -8,6 +8,7 @@ function watchConsole(page: Page) {
   page.on("pageerror", (e) => errors.push(String(e)));
   // The agent must never be triggered by a plain page load.
   page.on("request", (r) => {
+    if (r.method() === "POST" && r.url().includes("/link/drain")) errors.push(`unexpected drain request ${r.url()}`);
     if (new RegExp("/alerts/[^/]+/assess").test(r.url())) errors.push(`unexpected assess request ${r.url()}`);
   });
   return errors;
@@ -18,7 +19,9 @@ test("overview shows header, four tray cards, provenance and alert feed", async 
   await page.goto("/");
   await expect(page.getByTestId("clock-text")).toContainText("Mission day 21");
   await expect(page.getByTestId("spend-meter")).toContainText("Meta spend $4.37 · runtime guard $100");
-  await expect(page.getByTestId("link-chip")).toHaveText("LINK: UP (simulated)");
+  await expect(page.getByTestId("link-chip")).toHaveText("LINK: DELAYED (30 s)");
+  await expect(page.getByTestId("link-simulated")).toHaveText("simulated link");
+  await expect(page.getByTestId("brain-badge")).toHaveText("RECORDED · EDGE (muse-spark-1.3-contributor)");
   await expect(page.getByText("ALED plant images: real frames. Trays B and C carry labelled simulated faults")).toBeVisible();
   for (const id of ["A", "B", "C", "L"]) await expect(page.getByTestId(`tray-card-${id}`)).toBeVisible();
   await expect(page.getByTestId("prov-A")).toHaveText("DATASET");
@@ -128,4 +131,82 @@ test("agent panel replays the fixture stream to the assessment", async ({ page }
   await expect(page.getByTestId("evidence-detail")).toContainText("0.11");
   await expect(page.getByTestId("chart-soil_vwc").locator(".recharts-reference-dot")).toHaveCount(1);
   expect(errors).toEqual([]);
+});
+
+const drainConfirms = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __ceresDrainConfirms?: number }).__ceresDrainConfirms ?? 0);
+
+test("mars mode: link down, queue an alert, plan the drain, confirm, then the audit diff", async ({ page }) => {
+  const errors = watchConsole(page);
+  await page.goto("/mars");
+  // The fixture queue already holds one audited item (edge card + audit card), model string verbatim from the fixture.
+  const first = page.getByTestId("queue-item-lq_B_WILT_RISK_20160106T100000Z_20160107T120000Z");
+  await expect(first.getByTestId("queue-status")).toHaveText("audited");
+  await expect(first.getByTestId("edge-model")).toContainText("muse-spark-1.3-contributor (meta)");
+  await expect(first.getByTestId("edge-recorded")).toHaveText("RECORDED · EDGE (muse-spark-1.3-contributor)");
+  await expect(first.getByTestId("audit-label")).toHaveText("computed by code, not by a model");
+  await expect(first.getByTestId("audit-verdict")).toHaveText("agree");
+  await expect(first.getByTestId("perception-note")).toContainText("frames segmented before the link dropped");
+  await expect(page.locator("body")).not.toContainText(/glimmer/i);
+  expect(await drainConfirms(page)).toBe(0);
+
+  // Link down: queue the open alert for on-board triage.
+  await page.getByText("Link control", { exact: true }).click();
+  await page.getByTestId("link-set-down").click();
+  await expect(page.getByTestId("link-chip")).toHaveText("LINK: DOWN");
+  await page.getByTestId("link-set-down").click();
+  await expect(page.getByTestId("link-error")).toContainText("Already down");
+  await page.keyboard.press("Escape");
+  await page.getByTestId("queue-alert-alert_B_GROWTH_LAG_20160103T100000Z").click();
+  const second = page.getByTestId("queue-item-lq_alert_B_GROWTH_LAG_20160103T100000Z");
+  await expect(second.getByTestId("queue-status")).toHaveText("edge_done");
+  await expect(second.getByTestId("edge-card")).toBeVisible();
+  await expect(second.getByTestId("audit-card")).toHaveCount(0);
+
+  // A down link cannot drain: the plan itself says so.
+  await page.getByTestId("drain-plan").click();
+  await expect(page.getByTestId("drain-error")).toContainText("Cannot drain");
+
+  // Delayed: plan (free), then an explicit confirm click.
+  await page.getByText("Link control", { exact: true }).click();
+  await page.getByTestId("link-delay-input").fill("5");
+  await page.getByTestId("link-set-delayed").click();
+  await expect(page.getByTestId("link-chip")).toHaveText("LINK: DELAYED (5 s)");
+  await page.keyboard.press("Escape");
+  await page.getByTestId("drain-plan").click();
+  await expect(page.getByTestId("drain-plan-summary")).toContainText("1 item");
+  await expect(page.getByTestId("drain-plan-summary")).toContainText("$0.10-$0.20");
+  expect(await drainConfirms(page)).toBe(0);
+  await page.getByTestId("drain-confirm").dblclick();
+  await expect(second.getByTestId("audit-card")).toBeVisible();
+  await expect(second.getByTestId("queue-status")).toHaveText("audited");
+  expect(await drainConfirms(page)).toBe(1);
+  expect(errors).toEqual([]);
+});
+
+test("trust page shows the edge triage eval block and the numeric-grounding entry", async ({ page }) => {
+  const errors = watchConsole(page);
+  await page.goto("/trust");
+  await expect(page.getByTestId("edge-eval")).toBeVisible();
+  await expect(page.getByTestId("edge-det-grounding")).toContainText("6/6");
+  await expect(page.getByTestId("edge-top1-table")).toContainText("5/5");
+  await expect(page.getByTestId("edge-small-n")).toBeVisible();
+  await expect(page.getByTestId("edge-eval-model")).toContainText("fake-scripted");
+  await expect(page.getByTestId("det-grounding")).toContainText("9/9");
+  for (const id of ["eval-note", "edge-eval-note"]) {
+    await expect(page.getByTestId(id)).toContainText("Prompts were revised after earlier runs on these same scenarios");
+    await expect(page.getByTestId(id)).toContainText("n = 1 per fault");
+    await expect(page.getByTestId(id)).toContainText("9 of 11 scenarios raise an alert; 2 are no-alert checks");
+  }
+  expect(errors).toEqual([]);
+});
+
+test("agent panel shows the ungrounded-number warnings as a note", async ({ page }) => {
+  await page.goto("/");
+  await page.getByTestId("alert-alert_B_GROWTH_LAG_20160103T100000Z").click();
+  const panel = page.getByTestId("agent-panel");
+  await panel.getByTestId("investigate").click();
+  await panel.getByTestId("confirm-run").click();
+  await expect(panel.getByTestId("assessment")).toBeVisible({ timeout: 15_000 });
+  await expect(panel.getByTestId("warnings-note")).toContainText("3.77");
 });

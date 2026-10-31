@@ -1,0 +1,13 @@
+{
+  "started": true,
+  "confirm_required": false,
+  "link_state": "up",
+  "item_ids": [
+    "lq_B_WILT_RISK_20160106T100000Z_20160107T120000Z"
+  ],
+  "est_cost_usd": {
+    "low": 0.1,
+    "high": 0.2
+  },
+  "detail": "drain started; poll GET /link/queue for item statuses"
+}

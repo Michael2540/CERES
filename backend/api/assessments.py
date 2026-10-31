@@ -60,7 +60,8 @@ def start_assessment(
     with START_LOCK:  # check + insert atomically so a double click cannot start two paid runs
         if not force:
             existing = conn.execute(
-                "SELECT id FROM assessments WHERE alert_id = ? AND ts = ? AND (valid IS NULL OR json IS NOT NULL"
+                "SELECT id FROM assessments WHERE alert_id = ? AND ts = ? AND COALESCE(role, 'agronomist') = 'agronomist'"
+                " AND (valid IS NULL OR json IS NOT NULL"
                 " OR citation_errors NOT LIKE '[\"error:%') ORDER BY rowid DESC LIMIT 1",
                 (alert_id, iso_z(as_of)),
             ).fetchone()
@@ -103,6 +104,8 @@ def get_assessment(
         "assessment": json.loads(r["json"]) if r["json"] else None,
         "valid": bool(r["valid"]) if r["valid"] is not None else None,
         "citation_errors": json.loads(r["citation_errors"] or "[]"),
+        "warnings": json.loads(r["warnings"]) if r["warnings"] else [],
+        "role": r["role"] or "agronomist",
         "latency_ms": r["latency_ms"],
         "cost_usd": r["cost_usd"],
         "recorded": bool(r["recorded"]),

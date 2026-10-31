@@ -1,5 +1,5 @@
 import type {
-  AlertItem, AreaValidation, AssessmentResponse, Clock, EvalLatest, Evidence, Frame, Page, Series, Spend, StreamEvent,
+  AlertItem, AreaValidation, AssessmentResponse, Clock, DrainPlan, EdgeEvalLatest, EvalLatest, Evidence, Frame, LinkInfo, LinkState, Page, QueueItem, Series, Spend, StreamEvent,
   TrayDetail, TrayListItem,
 } from "./types";
 
@@ -33,6 +33,20 @@ let fixtureClock: Clock | null = null;
 const FIXTURE_ASSESSMENT_TS = "2016-01-03T10:00:00Z";
 const FRAME_SOURCE: Record<string, string> = { A: "dataset", B: "fault_transform", C: "fault_timewarp", L: "dataset" };
 
+// Mars mode in fixtures: a small stateful stand-in so the whole flow can be clicked through without a backend.
+// It mirrors the backend rules in backend/api/link.py (409 when up / already queued / down / same state).
+let linkFx: LinkInfo | null = null;
+let queueFx: QueueItem[] | null = null;
+async function fixtureQueue(): Promise<QueueItem[]> {
+  if (!queueFx) queueFx = (await fx<{ items: QueueItem[] }>("link_queue.json")).items;
+  return queueFx;
+}
+async function fixtureLink(): Promise<LinkInfo> {
+  if (!linkFx) linkFx = await fx<LinkInfo>("link.json");
+  const depth = (await fixtureQueue()).filter((i) => ["queued", "edge_done", "sent"].includes(i.status)).length;
+  return { ...linkFx, queue_depth: depth };
+}
+
 async function fixtureGet(path: string, params: Params): Promise<unknown> {
   const parts = path.split("/").filter(Boolean);
   if (path === "/health") return fx("health.json");
@@ -43,9 +57,10 @@ async function fixtureGet(path: string, params: Params): Promise<unknown> {
     const d = await fx<{ items: AlertItem[] }>("alerts.json");
     return { items: d.items.filter((a) => !params.tray_id || a.tray_id === params.tray_id) };
   }
-  if (path === "/eval/latest") return fx("eval_latest.json");
+  if (path === "/eval/latest") return fx(params.role === "edge" ? "eval_latest_edge.json" : "eval_latest.json");
   if (path === "/eval/area-validation") return fx("area_validation.json");
-  if (path === "/link") return fx("link.json");
+  if (path === "/link") return fixtureLink();
+  if (path === "/link/queue") return { items: await fixtureQueue() };
   if (parts[0] === "trays" && parts.length === 2) {
     if (parts[1] === "B") return fx("tray_B.json");
     const list = await fx<{ items: TrayListItem[] }>("trays.json");
@@ -103,6 +118,45 @@ async function fixturePost(path: string, body: Record<string, unknown>): Promise
   }
   if (path.startsWith("/actions/")) {
     return { action_id: path.split("/")[2], status: body.decision === "approve" ? "approved" : "rejected" };
+  }
+  if (path === "/link") {
+    const cur = await fixtureLink();
+    const st = body.state as LinkState;
+    const delay = st === "delayed" ? Number(body.delay_s) : null;
+    if (st === "delayed" && !(delay! > 0 && delay! <= 3600)) throw new ApiError(422, "delay_s must be in (0, 3600]");
+    if (st === cur.state && delay === cur.delay_s) throw new ApiError(409, `the link is already ${st}`);
+    linkFx = { ...cur, state: st, delay_s: delay };
+    return fixtureLink();
+  }
+  if (path === "/link/queue") {
+    const link = await fixtureLink();
+    const items = await fixtureQueue();
+    const id = String(body.alert_id);
+    if (link.state === "up") throw new ApiError(409, "the link is up: nothing to queue (POST /alerts/{id}/assess reaches Earth directly)");
+    if (items.some((i) => i.alert_id === id)) throw new ApiError(409, `alert ${id} is already queued`);
+    const item: QueueItem = {
+      ...items[0], id: `lq_${id}`, alert_id: id, status: "edge_done", audit_json: null, earth_assessment_id: null,
+      deliverable: link.state !== "down", deliver_in_s: link.state === "delayed" ? link.delay_s : null,
+    };
+    queueFx = [...items, item];
+    return item;
+  }
+  if (path === "/link/drain") {
+    const link = await fixtureLink();
+    if (link.state === "down") throw new ApiError(409, "the link is down: nothing can be delivered");
+    const items = await fixtureQueue();
+    const due = items.filter((i) => i.status === "queued" || i.status === "edge_done" || i.status === "edge_invalid");
+    const plan: DrainPlan = {
+      started: false, confirm_required: body.confirm !== true, link_state: link.state, item_ids: due.map((i) => i.id),
+      est_cost_usd: { low: +(due.length * 0.1).toFixed(2), high: +(due.length * 0.2).toFixed(2) },
+      detail: due.length ? 'send {"confirm": true} to run the Earth-side agronomist on these items (paid)' : "nothing is deliverable yet",
+    };
+    if (body.confirm !== true || !due.length) return plan;
+    const w = window as unknown as { __ceresDrainConfirms?: number };
+    w.__ceresDrainConfirms = (w.__ceresDrainConfirms ?? 0) + 1; // lets the smoke test count confirmed drains
+    const audit = items.find((i) => i.audit_json)?.audit_json ?? null;
+    queueFx = items.map((i) => (due.includes(i) ? { ...i, status: "audited", audit_json: audit, earth_assessment_id: "asmt_B_20160103T100000Z", deliverable: false } : i));
+    return { ...plan, started: true, detail: "drain started; poll GET /link/queue for item statuses" };
   }
   throw new ApiError(404, `no fixture for POST ${path}`);
 }
@@ -166,6 +220,19 @@ export const api = {
       if (e instanceof ApiError && e.status === 404) return null;
       throw e;
     }),
+  /** Edge-triage eval (role=edge); null when no run has written it (404). */
+  evalLatestEdge: () =>
+    get<EdgeEvalLatest>("/eval/latest", { role: "edge" }).catch((e) => {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }),
+  link: (asOf?: string) => get<LinkInfo>("/link", { as_of: asOf }),
+  setLink: (state: LinkState, delayS?: number) =>
+    post<LinkInfo>("/link", {}, delayS !== undefined ? { state, delay_s: delayS } : { state }),
+  linkQueue: (asOf?: string) => get<{ items: QueueItem[] }>("/link/queue", { as_of: asOf }),
+  enqueue: (alertId: string, asOf?: string) => post<QueueItem>("/link/queue", { as_of: asOf }, { alert_id: alertId }),
+  /** Without confirm: the plan only (free). With confirm: true: starts the PAID Earth-side runs. */
+  drain: (confirm: boolean) => post<DrainPlan>("/link/drain", {}, { confirm }),
 };
 
 /** Absolute URL for an image path from the API (frame image or overlay). */

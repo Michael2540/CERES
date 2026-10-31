@@ -3,7 +3,7 @@
 import { ErrorNote, Loading, Panel } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAsync } from "@/lib/mission";
-import type { AreaAgg, AreaValidation, EvalLatest, EvalScenario } from "@/lib/types";
+import type { AreaAgg, AreaValidation, EdgeEvalLatest, EvalLatest, EvalScenario } from "@/lib/types";
 
 const SOURCE_NAMES: Record<string, string> = {
   dataset: "Real frames (ALED, no fault)",
@@ -17,6 +17,7 @@ export default function TrustPage() {
   const ev = useAsync(() => api.evalLatest(), []);
   const d = ev.data;
   const av = useAsync(() => api.areaValidation(), []);
+  const ee = useAsync(() => api.evalLatestEdge(), []);
   return (
     <div className="mx-auto max-w-5xl space-y-4">
       <h1 className="text-xl font-semibold">Trust</h1>
@@ -31,6 +32,17 @@ export default function TrustPage() {
           </p>
         )}
         {d && <Scoreboard d={d} />}
+      </Panel>
+
+      <Panel title="Edge triage eval">
+        {ee.error && <ErrorNote error={ee.error} retry={ee.reload} />}
+        {!ee.data && ee.loading && <Loading what="Loading edge eval" />}
+        {!ee.data && !ee.loading && !ee.error && (
+          <p className="text-sm text-slate-500" data-testid="edge-eval-empty">
+            No edge triage eval run yet. Run scripts/run_eval.py --role edge to score the on-board model.
+          </p>
+        )}
+        {ee.data && <EdgeEval d={ee.data} />}
       </Panel>
 
       <Panel title="Area validation">
@@ -143,7 +155,7 @@ function AreaValidationView({ v }: { v: AreaValidation }) {
   );
 }
 
-const DET_METRICS: { key: keyof EvalLatest["deterministic"]; label: string; note: string; testId: string }[] = [
+const DET_METRICS: { key: "citation_validity" | "schema_validity" | "sensor_fault_discrimination" | "injection_resistance"; label: string; note: string; testId: string }[] = [
   { key: "citation_validity", label: "Citation validity", note: "validator found no errors", testId: "det-citation" },
   { key: "schema_validity", label: "Schema validity", note: "matches assessment.json", testId: "det-schema" },
   { key: "sensor_fault_discrimination", label: "Sensor-fault discrimination", note: "blamed the sensor only when it was at fault", testId: "det-sensor" },
@@ -184,6 +196,15 @@ function ScenarioRow({ r }: { r: EvalScenario }) {
   );
 }
 
+function EvalNote({ testId }: { testId: string }) {
+  return (
+    <p className="text-xs text-amber-200/90" data-testid={testId}>
+      Prompts were revised after earlier runs on these same scenarios; earlier results are in the run history (PROGRESS.md). n = 1 per fault.
+      9 of 11 scenarios raise an alert; 2 are no-alert checks.
+    </p>
+  );
+}
+
 function Scoreboard({ d }: { d: EvalLatest }) {
   const det = d.deterministic;
   return (
@@ -198,8 +219,11 @@ function Scoreboard({ d }: { d: EvalLatest }) {
         <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Deterministic checks, computed in code</h3>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {DET_METRICS.map((m) => (
-            <Stat key={m.key} label={m.label} value={det[m.key]} note={m.note} testId={m.testId} />
+            <Stat key={m.key} label={m.label} value={det[m.key] ?? "n/a"} note={m.note} testId={m.testId} />
           ))}
+          {det.numeric_grounding && (
+            <Stat label="Numeric grounding" value={det.numeric_grounding} note="numbers in free text found in tool outputs" testId="det-grounding" />
+          )}
         </div>
         <p className="mt-1 text-xs text-slate-500">
           Also: sensor fault considered {det.sensor_fault_considered}, likelihoods sum to at most 1 {det.likelihood_sum_ok}, false alarms on the
@@ -241,6 +265,7 @@ function Scoreboard({ d }: { d: EvalLatest }) {
       <p className="text-xs text-slate-400" data-testid="eval-model">
         Model {d.model}, reasoning effort {d.effort}, role {d.role}. Run {d.run_id}: {d.n_scenarios} scenarios, {d.passed} passed every check.
       </p>
+      <EvalNote testId="eval-note" />
       <div>
         <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Scenarios</h3>
         <div className="overflow-x-auto">
@@ -272,6 +297,66 @@ function Stat({ label, value, note, testId }: { label: string; value: string; no
       <div className="text-[11px] uppercase tracking-wider text-slate-500">{label}</div>
       <div className="font-mono text-lg text-slate-100">{value}</div>
       <div className="text-[11px] text-slate-500">{note}</div>
+    </div>
+  );
+}
+
+function EdgeEval({ d }: { d: EdgeEvalLatest }) {
+  const det = d.deterministic;
+  const rows: [string, string, string, string][] = [
+    ["Citation validity", det.citation_validity, "cited ids are in the run's tool log", "edge-det-citation"],
+    ["Schema validity", det.schema_validity, "matches edge.json", "edge-det-schema"],
+    ["Numeric grounding", det.numeric_grounding, "numbers in the instruction and handoff found in tool outputs", "edge-det-grounding"],
+    ["Injection resistance", det.injection_resistance, "did not follow the injected instruction", "edge-det-injection"],
+    ["Urgency sanity", det.urgency_sanity, "urgency fits the alert severity", "edge-det-urgency"],
+  ];
+  return (
+    <div className="space-y-4" data-testid="edge-eval">
+      {d.fake && (
+        <p className="rounded border border-amber-600/50 bg-amber-950/30 p-2 text-xs text-amber-200" data-testid="edge-fake-run">
+          Scripted run: the answers are canned, so these numbers only show the harness works. They are not model results.
+        </p>
+      )}
+      {d.aborted && <p className="rounded border border-red-600/50 bg-red-950/30 p-2 text-xs text-red-200">Run stopped early: {d.aborted}</p>}
+      <div data-testid="edge-det-metrics">
+        <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Deterministic checks, computed in code</h3>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {rows.map(([label, value, note, id]) => (
+            <Stat key={id} label={label} value={value} note={note} testId={id} />
+          ))}
+        </div>
+      </div>
+      <div>
+        <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Top-1 cause, correct / scenarios per data source</h3>
+        <table className="w-full text-sm" data-testid="edge-top1-table">
+          <thead>
+            <tr className="text-[11px] uppercase tracking-wider text-slate-500">
+              <th className="text-left font-normal">Data source</th>
+              <th className="text-right font-normal">Top-1</th>
+              <th className="text-right font-normal">n</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(d.top1).map(([k, v]) => (
+              <tr key={k} className="border-t border-slate-800">
+                <td className="py-1 text-slate-300">{SOURCE_NAMES[k] ?? k}</td>
+                <td className="py-1 text-right font-mono text-slate-100">{v}</td>
+                <td className="py-1 text-right font-mono text-slate-400">{d.top1_n[k]}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {d.small_n && (
+          <p className="mt-2 rounded border border-amber-600/50 bg-amber-950/30 p-2 text-xs text-amber-200" data-testid="edge-small-n">
+            Small n: these are counts over a handful of scenarios, not rates. Read them as examples, not accuracy.
+          </p>
+        )}
+      </div>
+      <p className="text-xs text-slate-400" data-testid="edge-eval-model">
+        Model {d.model}, mode {d.edge_mode ?? "n/a"}, role {d.role}. Run {d.run_id}: {d.n_assessed} of {d.n_scenarios} scenarios assessed, {d.passed} passed every check.
+        Generated {d.generated_at.slice(0, 10)} UTC (wall clock).
+      </p>
+      <EvalNote testId="edge-eval-note" />
     </div>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
-import { api } from "@/lib/api";
+import { useState } from "react";
+import Link from "next/link";
+import { ApiError, api } from "@/lib/api";
 import { useAsync, useMission } from "@/lib/mission";
 import type { AlertItem } from "@/lib/types";
 import { Empty, ErrorNote, Loading, Panel, shortTs } from "./ui";
@@ -39,6 +41,50 @@ export function AlertRow({ a }: { a: AlertItem }) {
   );
 }
 
+/** Mars mode: while the link is not up, an open alert can be queued for on-board triage instead of going to Earth. */
+function QueueActions({ items }: { items: AlertItem[] }) {
+  const { link, asOf, refreshLink } = useMission();
+  const [res, setRes] = useState<Record<string, { busy?: boolean; ok?: boolean; msg?: string }>>({});
+  const open = items.filter((a) => a.status === "open");
+  if (!link || link.state === "up" || open.length === 0) return null;
+  const queue = async (id: string) => {
+    if (res[id]?.busy) return;
+    setRes((r) => ({ ...r, [id]: { busy: true } }));
+    try {
+      const it = await api.enqueue(id, asOf);
+      setRes((r) => ({ ...r, [id]: { ok: true, msg: it.error ? `Queued, but: ${it.error}` : `Queued (${it.status}).` } }));
+      refreshLink();
+    } catch (e) {
+      const msg = e instanceof ApiError && e.status === 409 ? `Not queued: ${e.message}` : e instanceof Error ? e.message : String(e);
+      setRes((r) => ({ ...r, [id]: { msg } }));
+    }
+  };
+  return (
+    <div className="mt-3 border-t border-slate-700 pt-2" data-testid="queue-actions">
+      <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-violet-300">Link not up: on-board triage</h3>
+      <ul className="space-y-1.5">
+        {open.map((a) => (
+          <li key={a.id} className="text-[11px]">
+            <button
+              onClick={() => void queue(a.id)}
+              disabled={res[a.id]?.busy || res[a.id]?.ok}
+              data-testid={`queue-alert-${a.id}`}
+              className="rounded border border-violet-500 px-2 py-0.5 text-violet-200 hover:bg-violet-950 disabled:opacity-50"
+            >
+              {res[a.id]?.busy ? "Queueing..." : `Queue ${a.rule} · tray ${a.tray_id} for on-board triage`}
+            </button>
+            {res[a.id]?.msg && (
+              <span className={`ml-2 ${res[a.id].ok ? "text-emerald-300" : "text-red-300"}`} role={res[a.id].ok ? "status" : "alert"} data-testid="queue-result">
+                {res[a.id].msg} {res[a.id].ok && <Link href="/mars" className="underline">Mars mode</Link>}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default function AlertFeed({ trayId, title = "Alert feed" }: { trayId?: string; title?: string }) {
   const r = useAsync((a) => api.alerts(a, trayId), [trayId]);
   const items = r.data?.items ?? [];
@@ -52,6 +98,7 @@ export default function AlertFeed({ trayId, title = "Alert feed" }: { trayId?: s
           <AlertRow key={a.id} a={a} />
         ))}
       </ul>
+      <QueueActions items={items} />
     </Panel>
   );
 }

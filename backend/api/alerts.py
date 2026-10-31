@@ -28,7 +28,7 @@ def visible_alerts(
     hi = iso_z(as_of)
     q = (
         "SELECT a.id, a.tray_id, a.rule, a.severity, a.threshold_tag, e.ts, e.evidence_ids, e.detail,"
-        " (SELECT s.id FROM assessments s WHERE s.alert_id = a.id AND s.ts <= :hi ORDER BY s.ts DESC LIMIT 1)"
+        " (SELECT s.id FROM assessments s WHERE s.alert_id = a.id AND s.ts <= :hi AND COALESCE(s.role, 'agronomist') = 'agronomist' ORDER BY s.ts DESC LIMIT 1)"
         " AS assessment_id FROM alerts a JOIN alert_events e ON e.alert_id = a.id AND e.ts = ("
         " SELECT MAX(x.ts) FROM alert_events x WHERE x.alert_id = a.id AND x.ts <= :hi)"
         " WHERE a.first_ts <= :hi"

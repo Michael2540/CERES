@@ -26,6 +26,7 @@ from backend.api import (
     evaluation,
     evidence,
     frames,
+    link,
     series,
     system,
     trays,
@@ -54,6 +55,17 @@ def cycle_once(as_of: datetime) -> None:
         conn.close()
 
 
+def link_advance(prev: datetime, new: datetime) -> None:
+    """The clock advanced (prev, new]: queue and triage the alerts raised in it while the link is not up (own connection)."""
+    from backend.api import link as link_api
+
+    conn = deps.open_db()
+    try:
+        link_api.run_auto(conn, prev, new)
+    finally:
+        conn.close()
+
+
 async def background_loop(clock: MissionClock, poll_s: float = 1.0) -> None:
     last: datetime | None = None
     while True:
@@ -77,6 +89,14 @@ async def background_loop(clock: MissionClock, poll_s: float = 1.0) -> None:
             raise
         except Exception:  # a failed cycle must not kill the loop
             log.exception("background cycle failed")
+        try:  # Mars mode: alerts first raised in the span the clock just crossed (also after a paused jump)
+            adv = clock.take_advance()
+            if adv:
+                await asyncio.to_thread(link_advance, *adv)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("link auto-queue failed")
         await asyncio.sleep(poll_s)
 
 
@@ -110,7 +130,7 @@ async def _validation_error(_req: Request, exc: RequestValidationError) -> JSONR
     return JSONResponse({"detail": errs}, status_code=422)
 
 
-for module in (frames, trays, series, alerts, evidence, actions, system, assessments, evaluation):
+for module in (frames, trays, series, alerts, evidence, actions, system, assessments, evaluation, link):
     app.include_router(module.router)
 
 
