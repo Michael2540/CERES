@@ -1,20 +1,19 @@
 id: camera_occlusion
 description: >
-  Camera occlusion: every frame of control tray A from 2016-01-06T09:00Z to 2016-01-06T21:00Z is replaced by a black
-  image with a canopy mask of area 0 (written straight into the temp DB, no SAM call). The plants did not change.
-  Control tray A is the reference of B, C and L, so a dead A camera can raise GROWTH_LAG on the trays compared with
-  it. `alert_rule: auto` assesses whichever alert is open on tray A and, if there is none, the open GROWTH_LAG
-  alert of a tray that uses A as its reference (a knock-on alert). The agent should rank camera_fault (or
-  sensor_fault) above any plant cause. If no rule fires at all, the scenario records "no alert" and has no
-  assessment (require_alert is false); the run report then says so.
+  Camera occlusion on a healthy tray: every frame of tray B from 2016-01-03T09:00Z to 2016-01-03T21:00Z (before B's
+  simulated drought starts on 01-05) is replaced by a black image with a canopy mask of area 0 (written straight
+  into the temp DB, no SAM call). The plants did not change. Per-pot growth tracking compares only pots that hold a
+  plant at both ends of a window, so a blank frame must not read as plant loss: no plant-health alert should be
+  raised on B. Scored as a robustness check (false alarm or not); nothing is assessed. An earlier version occluded
+  control tray A on 01-06 and ended up assessing B's real, already-open drought alert, which tested nothing.
 data_source: simulated         # injected black frames, not a real or transformed dataset frame
-tray_id: A
-as_of: "2016-01-06T22:00:00Z"
-window: {start: "2016-01-05T22:00:00Z", end: "2016-01-06T22:00:00Z"}
-alert_rule: auto               # any alert that fires on tray A after the injection
+tray_id: B
+as_of: "2016-01-03T22:00:00Z"
+window: {start: "2016-01-03T00:00:00Z", end: "2016-01-03T22:00:00Z"}
+alert_rule: null               # nothing to assess: the pass condition is that no alert is raised
 injections:
-  - {type: occlude_frames, tray_id: A, start: "2016-01-06T09:00:00Z", end: "2016-01-06T21:00:00Z"}
-expected_top_cause: camera_fault
-acceptable_causes: [camera_fault, sensor_fault]
+  - {type: occlude_frames, tray_id: B, start: "2016-01-03T09:00:00Z", end: "2016-01-03T21:00:00Z"}
+expected_top_cause: null
+acceptable_causes: []
 expected_alerts: []
-scoring: {require_alert: false}
+scoring: {nominal: true}

@@ -77,6 +77,7 @@ class PotGrid(BaseModel):
 class TrayConfig(BaseModel):
     id: str
     crop: str
+    hardware: str = ""  # physical layout shown to the agent (never the treatment or the fault)
     aled_tray: str
     treatment: Literal["control", "no_water", "low_light", "humid_no_fan"]
     fault_start: str | None = None

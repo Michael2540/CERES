@@ -23,20 +23,26 @@ Tray B, wilting (`wilt_transform`), a drought seen from above:
   day 3-4. The dulled plant stays inside the HSV plant mask, so area metrics do not collapse on colour.
 - days = 0 returns the frame unchanged.
 
-Tray C, low light (`timewarp_source_ts`): from fault_start the frame at time t is the real frame closest to
-fault_start + (t - fault_start) * growth_factor (never later than t); its brightness is then scaled by
-brightness_factor (`dim`). Real pixels, simulated growth lag.
+Tray C, low light (`timewarp_source_ts`): from fault_start the frame at time t is the real frame closest to the
+time at which the tray had received growth_factor x the lamp-on time it received between fault_start and t
+(lamp-hours warp: plants grow in the light, so only lit time is slowed; without a lamp schedule, plain clock time
+is used). The target therefore always falls in imaging hours, so consecutive mission frames get distinct
+sources instead of snapping to the last evening frame. Never later than t. Its brightness is then scaled by
+brightness_factor (`dim`). Real pixels, simulated growth lag. The candidate pool is every real frame of the
+tray: the mission frames (data/raw/aled) plus the denser time-warp sources (data/raw/aled_src, fetched with
+scripts/fetch_dataset.py --timewarp-sources), so consecutive mission frames get distinct sources.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import cv2
 import numpy as np
 
 from backend.config import FaultParams
+from backend.timeutil import lamp_is_on
 
 FAULTS_VERSION = "wilt-4"  # wilt-4: every plant pixel of both frames is erased (no ROI clip, 7 px fill margin)
 PLANT_LO = (15, 50, 90)  # OpenCV HSV: hue 30-180 degrees, covers yellow-green to green
@@ -143,13 +149,34 @@ def wilt_transform(
     return np.clip(out, 0, 255).astype(np.uint8)
 
 
+LIT_STEP = timedelta(minutes=5)  # resolution of the lamp-hours warp
+
+
+def lit_target(ts: datetime, fault_start: datetime, growth_factor: float, lamp) -> datetime:
+    """The time at which the tray had been lit growth_factor x as long (since fault_start) as it had by ts."""
+    steps, t = [], fault_start
+    while t < ts:
+        steps.append(lamp_is_on(lamp, t))
+        t += LIT_STEP
+    need, acc = growth_factor * sum(steps), 0.0
+    for k, lit in enumerate(steps):
+        if acc >= need:
+            return fault_start + k * LIT_STEP
+        acc += lit
+    return ts
+
+
 def timewarp_source_ts(
-    ts: datetime, fault_start: datetime, growth_factor: float, available_ts: Sequence[datetime]
+    ts: datetime, fault_start: datetime, growth_factor: float, available_ts: Sequence[datetime], lamp=None
 ) -> datetime:
-    """The real frame time that stands in for `ts` on a low-light tray (see module docstring)."""
+    """The real frame time that stands in for `ts` on a low-light tray (see module docstring). With `lamp`
+    (an on/off schedule) only lit time is warped; without it, clock time."""
     if ts < fault_start:
         return ts
-    target = fault_start + (ts - fault_start) * growth_factor
+    target = (
+        lit_target(ts, fault_start, growth_factor, lamp) if lamp is not None
+        else fault_start + (ts - fault_start) * growth_factor
+    )
     candidates = [a for a in available_ts if a <= ts]
     if not candidates:
         return ts

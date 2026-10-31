@@ -55,7 +55,7 @@ Planned and switchable: the Mars-mode edge model (`EDGE_MODE=recorded|remote_gli
 | Muse Spark Flight Agronomist with 8 logged tools, citation validator, SSE streaming | ✅ |
 | Mission-control dashboard (Next.js) with provenance badges, charts, frame scrubber, agent panel | ✅ |
 | Validation of SAM masks against 55 ALED hand-annotated frames, with a colour-threshold baseline (shown on /trust) | ✅ |
-| Evaluation harness (≥ 8 scenarios, small n, reported as fractions) | ⏳ M7 |
+| Evaluation harness: 11 scenarios (faults, sensor and camera failures, a contradicting crew note, prompt injection), deterministic scoring, scoreboard on /trust | ✅ |
 | Mars mode: link delay, on-board triage, Earth-side audit | ⏳ M8 |
 
 ## Demo
@@ -78,6 +78,7 @@ Build the demo database:
 
 ```bash
 python scripts/fetch_dataset.py --with-masks       # free; ~170 MB of sampled ALED frames into data/raw/
+python scripts/fetch_dataset.py --timewarp-sources --trays C   # free; extra real frames for tray C's low-light time-warp
 python scripts/segment_all.py --dry-run            # prints the SAM cost estimate (~$2.10 for 844 frames)
 python scripts/segment_all.py --backend api        # paid: sam-3.1; results cached in .sam_cache/
 python scripts/backfill_pots.py                    # assigns plants to pots (no model calls)
@@ -100,7 +101,8 @@ Tests: `make test` (backend), `make lint`, `cd web && npx playwright test`.
 - ALED has no real stress treatments, so every fault is simulated on real images, and the evaluation can only measure how well CERES recovers *simulated* faults.
 - ALED removes plants for destructive sampling every few days. CERES tracks growth per pot so these removals don't read as shrinkage.
 - Thresholds are author-chosen and mostly relative to the control tray. There are no sourced Arabidopsis setpoints.
-- On mask quality SAM 3.1 does not beat a simple colour threshold on these high-contrast frames (Dice 0.88 vs 0.89; area error 29 % vs 16 %), and it traces the smallest seedlings generously (up to about twice the annotated area). Its advantage is separating touching plants: per-pot area r 0.97 vs 0.23 and exact plant count 75 % vs 56 % when each method's instances are assigned to pots, as CERES does.
+- Raw SAM 3.1 masks include a fringe around leaves (area error 29 %; seedlings up to twice the annotated area), so CERES trims each SAM instance to its plant-coloured pixels (Dice 0.94, area error 5 %, vs 0.89 / 16 % for a plain colour threshold). The trim was tuned on the same 55 annotated frames it is scored on, so it is a fitted result. SAM's other advantage is separating touching plants (per-pot area r 0.97 vs 0.24 from each method's instances).
+- Agent eval (11 scenarios, one run each, small n): 10/11 pass at both low and high reasoning effort. The consistent miss is tray L, where the agent blames L's own humidity sensor (it disagrees with the room air) instead of a real humid microclimate. The first run scored 6/9 on top cause; two of those misses came from flaws in our simulation (tray C's time-warp repeated identical frames; see PROGRESS.md), fixed before the reported runs.
 - Canopy area in cm² uses a nominal scale (the dataset has no calibration marker). Pixel area is the primary metric.
 
 ## Team

@@ -3,6 +3,7 @@
 trays:
   - id: A                              # tray id used everywhere in the API and DB
     crop: arabidopsis_thaliana         # crop species (model plant of space plant biology)
+    hardware: "sensors: soil moisture and light on the tray; temperature, RH and CO2 from the shared room-air sensors"
     aled_tray: PSI_Tray031             # ALED source tray whose frames this tray replays
     treatment: control                 # control | no_water | low_light | humid_no_fan
     fault_start: null                  # ISO UTC when the simulated fault begins; null = no fault
@@ -19,6 +20,7 @@ trays:
 
   - id: B
     crop: arabidopsis_thaliana
+    hardware: "sensors: soil moisture and light on the tray; temperature, RH and CO2 from the shared room-air sensors"
     aled_tray: PSI_Tray032
     treatment: no_water                # water withheld -> wilting
     fault_start: "2016-01-05T08:00:00Z"   # bigger plants make wilting visible
@@ -37,6 +39,7 @@ trays:
 
   - id: C
     crop: arabidopsis_thaliana
+    hardware: "sensors: soil moisture and light on the tray; temperature, RH and CO2 from the shared room-air sensors"
     aled_tray: PSI_Tray033
     treatment: low_light
     fault_start: "2016-01-03T08:00:00Z"   # after the 2016-01-01 imaging gap
@@ -54,6 +57,7 @@ trays:
 
   - id: L
     crop: arabidopsis_thaliana
+    hardware: "sensors: soil moisture and light on the tray; its own temperature and RH sensors at the canopy; CO2 from the shared room-air sensor"
     aled_tray: PSI_Tray034
     treatment: humid_no_fan            # humidity dome, no fan -> low VPD
     fault_start: "2016-01-08T08:00:00Z"

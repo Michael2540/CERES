@@ -14,6 +14,7 @@ import hashlib
 import json
 import logging
 import re
+import shutil
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,10 +22,12 @@ from pathlib import Path
 import cv2
 
 from backend.config import ROOT, TrayConfig, TraysConfig
+from backend.perception.sam_client import CACHE_DIR, cache_path
 from backend.sim.faults import FAULTS_VERSION, dim, timewarp_source_ts, wilt_transform
 
 log = logging.getLogger(__name__)
 DERIVED_DIR = ROOT / "data" / "derived"
+SRC_DIRNAME = "aled_src"  # sibling of the mission folder: extra real frames, time-warp sources only
 _NAME = re.compile(r"^(?P<tray>[A-Za-z0-9]+)_(?P<ts>\d{8}T\d{6})\.jpg$")
 
 
@@ -62,7 +65,7 @@ def _kind(tray: TrayConfig) -> str | None:
     return None
 
 
-TIMEWARP_VERSION = "wilt-3"  # frozen: tray C's hash must not change when the wilt transform (FAULTS_VERSION) does
+TIMEWARP_VERSION = "lit-1"  # lamp-hours warp; independent of FAULTS_VERSION, so regenerating B never touches C
 
 
 def fault_hash(tray: TrayConfig) -> str | None:
@@ -80,69 +83,121 @@ def fault_hash(tray: TrayConfig) -> str | None:
     return hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()[:16]
 
 
-def _derive(tray: TrayConfig, ts: datetime, raw: dict[datetime, Path], out: Path) -> str:
-    """Write the faulted frame for (tray, ts) to `out`; return its source label."""
+def _scan(folder: Path, trays: dict[str, TrayConfig]) -> dict[str, dict[datetime, Path]]:
+    out: dict[str, dict[datetime, Path]] = {}
+    if folder.is_dir():
+        for p in sorted(folder.glob("*.jpg")):
+            m = _NAME.match(p.name)
+            if m and m["tray"] in trays:
+                out.setdefault(m["tray"], {})[_parse_ts(m["ts"])] = p
+    return out
+
+
+def _timewarp_src(tray: TrayConfig, ts: datetime, pool: dict[datetime, Path]) -> Path:
+    """The real frame (mission or extra source) that stands in for `ts` on a low-light tray."""
+    fault_start = _iso(tray.fault_start)
+    assert fault_start is not None and tray.fault.growth_factor is not None
+    return pool[timewarp_source_ts(ts, fault_start, tray.fault.growth_factor, sorted(pool), tray.lamp)]
+
+
+def _derive(
+    tray: TrayConfig, ts: datetime, raw: dict[datetime, Path], out: Path, pool: dict[datetime, Path] | None = None
+) -> tuple[str, str | None]:
+    """Write the faulted frame for (tray, ts) to `out`; return (source label, time-warp source file name)."""
     fault_start, f, kind = _iso(tray.fault_start), tray.fault, _kind(tray)
     assert fault_start is not None
+    src_name = None
     if kind == "fault_transform":
         before = [t for t in raw if t <= fault_start]
         ref = cv2.imread(str(raw[max(before)])) if before else None  # last real frame <= fault_start
         days = (ts - fault_start).total_seconds() / 86400.0
         img = wilt_transform(cv2.imread(str(raw[ts])), days, f, tuple(tray.roi), ref, tray.roi_margin_px)
     else:
-        src = timewarp_source_ts(ts, fault_start, f.growth_factor, sorted(raw))
-        img = cv2.imread(str(raw[src]))
+        src = _timewarp_src(tray, ts, pool if pool is not None else raw)
+        src_name = src.name
+        img = cv2.imread(str(src))
         if f.brightness_factor is not None:
             img = dim(img, f.brightness_factor)
     cv2.imwrite(str(out), img, [cv2.IMWRITE_JPEG_QUALITY, 92])
-    return kind
+    return kind, src_name
+
+
+def _adopt_cache(old_raw: Path, new_raw: Path, fh: str, cache_dir: Path) -> None:
+    """Copy cache entries keyed on the mission frame's own raw file (the pre-aled_src key) to the key of the
+    real source frame, for a frame whose derived image did not change. Nothing is billed twice."""
+    from backend.perception.segment import PROMPT
+
+    for b in ("api", "hsv"):
+        old, new = cache_path(old_raw, PROMPT, b, cache_dir, old_raw, fh), cache_path(new_raw, PROMPT, b, cache_dir, new_raw, fh)
+        if old.exists() and not new.exists():
+            shutil.copyfile(old, new)
 
 
 def ingest_folder(
-    conn: sqlite3.Connection, folder: str | Path, cfg: TraysConfig, derived_dir: Path = DERIVED_DIR
+    conn: sqlite3.Connection,
+    folder: str | Path,
+    cfg: TraysConfig,
+    derived_dir: Path = DERIVED_DIR,
+    src_folder: Path | None = None,
+    cache_dir: Path = CACHE_DIR,
 ) -> int:
-    """Insert frames for every <tray>_<ts>.jpg in folder; returns the number of new rows."""
+    """Insert frames for every <tray>_<ts>.jpg in folder; returns the number of new rows.
+
+    src_folder (default: `aled_src` next to folder) holds extra real frames that are only candidates for a
+    time-warp source; they never become mission frames."""
+    folder = Path(folder)
     trays = {t.id: t for t in cfg.trays}
-    raw: dict[str, dict[datetime, Path]] = {}
-    for p in sorted(Path(folder).glob("*.jpg")):
-        m = _NAME.match(p.name)
-        if m and m["tray"] in trays:
-            raw.setdefault(m["tray"], {})[_parse_ts(m["ts"])] = p
-    existing = {r["id"]: r["fault_hash"] for r in conn.execute("SELECT id, fault_hash FROM frames")}
+    raw = _scan(folder, trays)
+    extra = _scan(src_folder if src_folder is not None else folder.parent / SRC_DIRNAME, trays)
+    existing = {r["id"]: (r["fault_hash"], r["src_file"]) for r in conn.execute("SELECT id, fault_hash, src_file FROM frames")}
     seen_sha: set[str] = set()
-    inserted = regenerated = 0
+    inserted = regenerated = adopted = 0
     derived_dir.mkdir(parents=True, exist_ok=True)
     for tid, by_ts in raw.items():
         tray = trays[tid]
-        fh, start = fault_hash(tray), _iso(tray.fault_start)
+        fh, start, kind = fault_hash(tray), _iso(tray.fault_start), _kind(tray)
+        pool = {**extra.get(tid, {}), **by_ts}  # union; the mission file wins a same-timestamp clash
         for ts, p in sorted(by_ts.items()):
             fid = f"{tid}:{iso_z(ts)}"
             derived = fh is not None and start is not None and ts >= start
+            want_path = _timewarp_src(tray, ts, pool) if derived and kind == "fault_timewarp" else None
+            want = want_path.name if want_path else None
             if fid in existing:
-                if not derived or existing[fid] == fh:
+                cur_fh, cur_src = existing[fid]
+                if not derived or (cur_fh == fh and cur_src == want):
                     continue
+                if cur_fh == fh and cur_src is None and want is not None:
+                    # rows from before aled_src: the old source came from the mission pool alone
+                    old = _timewarp_src(tray, ts, by_ts)
+                    if old.name == want:  # same derived image: keep its masks, move its cache entry
+                        _adopt_cache(p, want_path, fh, cache_dir)
+                        conn.execute("UPDATE frames SET src_file = ? WHERE id = ?", (want, fid))
+                        existing[fid] = (fh, want)
+                        adopted += 1
+                        continue
                 out = derived_dir / p.name  # stale derived frame: regenerate, drop its masks
-                source = _derive(tray, ts, by_ts, out)
+                source, src_name = _derive(tray, ts, by_ts, out, pool)
                 conn.execute(
-                    "UPDATE frames SET path = ?, source = ?, fault_hash = ? WHERE id = ?",
-                    (_rel(out), source, fh, fid),
+                    "UPDATE frames SET path = ?, source = ?, fault_hash = ?, src_file = ? WHERE id = ?",
+                    (_rel(out), source, fh, src_name, fid),
                 )
                 conn.execute("DELETE FROM masks WHERE frame_id = ?", (fid,))
-                existing[fid] = fh
+                existing[fid] = (fh, src_name)
                 regenerated += 1
                 continue
             sha = _sha256(p)
             if sha in seen_sha:
                 continue
             seen_sha.add(sha)
+            src_name = None
             if derived:
                 out = derived_dir / p.name
-                source, path = _derive(tray, ts, by_ts, out), out
+                (source, src_name), path = _derive(tray, ts, by_ts, out, pool), out
             else:
                 source, path = "dataset", p
             conn.execute(
-                "INSERT INTO frames(id, tray_id, ts, path, cm2_per_px, calib_flag, source, fault_hash)"
-                " VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT INTO frames(id, tray_id, ts, path, cm2_per_px, calib_flag, source, fault_hash, src_file)"
+                " VALUES (?,?,?,?,?,?,?,?,?)",
                 (
                     fid,
                     tid,
@@ -152,11 +207,12 @@ def ingest_folder(
                     tray.calib_flag,
                     source,
                     fh if derived else None,
+                    src_name,
                 ),
             )
-            existing[fid] = fh if derived else None
+            existing[fid] = (fh if derived else None, src_name)
             inserted += 1
     conn.commit()
-    if regenerated:
-        log.info("regenerated %d stale derived frames", regenerated)
+    if regenerated or adopted:
+        log.info("regenerated %d stale derived frames, kept %d with an unchanged source", regenerated, adopted)
     return inserted

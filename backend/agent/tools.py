@@ -230,6 +230,10 @@ def get_tray_overview(ctx: ToolContext, args: dict) -> tuple[dict, list[str]]:
     if soil:
         latest.append({"id": f"{tray}:soil_vwc:{soil['ts']}", "metric": "soil_vwc", "ts": soil["ts"],
                        "value": soil["value"], "unit": UNITS["soil_vwc"], "source": "sensor"})
+    light = latest_value(conn, tray, "ppfd_est", hi)
+    if light:
+        latest.append({"id": f"{tray}:ppfd_est:{light['ts']}", "metric": "ppfd_est", "ts": light["ts"],
+                       "value": light["value"], "unit": UNITS["ppfd_est"], "source": "sensor"})
     temp = rh = None
     for m in ("temp_c", "rh_pct", "co2_ppm"):
         owner = metric_owner(conn, tray, m)
@@ -247,6 +251,7 @@ def get_tray_overview(ctx: ToolContext, args: dict) -> tuple[dict, list[str]]:
     result = {
         "tray_id": tray,
         "crop": cfg.crop,
+        "hardware": cfg.hardware,
         "treatment": cfg.treatment if DISCLOSE_TREATMENT else "undisclosed",
         "reference_tray_id": cfg.reference_tray_id,
         "age_days": (ctx.as_of - DATASET_START).days,

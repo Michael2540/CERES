@@ -21,6 +21,7 @@ import cv2
 
 from backend.config import ROOT, TrayConfig, TraysConfig
 from backend.perception import metrics, pots, trim
+from backend.perception.ingest import SRC_DIRNAME
 from backend.perception.sam_client import (
     CACHE_DIR,
     ApiBackend,
@@ -35,7 +36,7 @@ from backend.spend import BudgetExceeded, cost_for
 
 PROMPT = "plant"
 RAW_DIR = ROOT / "data" / "raw" / "aled"
-_COLS = "f.id, f.tray_id, f.ts, f.path, f.cm2_per_px, f.fault_hash"
+_COLS = "f.id, f.tray_id, f.ts, f.path, f.cm2_per_px, f.fault_hash, f.src_file"
 
 
 class MissingRaw(RuntimeError):
@@ -65,16 +66,21 @@ def pending_frames(
 
 
 def frame_source(frame: sqlite3.Row, raw_dir: Path | None = None) -> tuple[Path, Path | None, str | None]:
-    """(image path, raw ALED frame, fault_hash) for cache keying. The raw frame is the same-named file in
-    the dataset folder for a derived frame (fault_hash set); None for a dataset frame (the image is raw).
-    Raises MissingRaw when a derived frame's raw file is absent: the key would silently change and a paid
-    call would follow."""
+    """(image path, raw ALED frame, fault_hash) for cache keying. The raw frame is the real frame the derived
+    image was built from: the frame's `src_file` (tray C time-warp source, found in the dataset folder or in
+    the sibling `aled_src` folder) or, without one, the same-named file in the dataset folder (tray B).
+    None for a dataset frame (the image is raw). Raises MissingRaw when a derived frame's raw file is absent:
+    the key would silently change and a paid call would follow."""
     image = ROOT / frame["path"]
     fh = frame["fault_hash"]
-    raw = (raw_dir or RAW_DIR) / image.name
-    if fh and not raw.is_file():
-        raise MissingRaw(f"raw ALED file {raw} of derived frame {frame['id']} is missing; refusing to segment")
-    return image, (raw if fh else None), fh
+    if not fh:
+        return image, None, None
+    base = raw_dir or RAW_DIR
+    name = (frame["src_file"] if "src_file" in frame.keys() else None) or image.name  # noqa: SIM118 (sqlite3.Row)
+    for d in (base, base.parent / SRC_DIRNAME):
+        if (d / name).is_file():
+            return image, d / name, fh
+    raise MissingRaw(f"raw ALED file {base / name} of derived frame {frame['id']} is missing; refusing to segment")
 
 
 def frame_cache_path(
@@ -88,13 +94,15 @@ def estimate_cost_usd(
     conn: sqlite3.Connection, frames: list[sqlite3.Row], cache_dir: Path = CACHE_DIR
 ) -> float:
     """$ for frames not already in the disk cache, at sam-3.1 prices."""
-    n = 0
+    todo: set[Path] = set()  # frames sharing a source share one cache entry, so one call
     for f in frames:
         try:
-            n += not frame_cache_path(f, "api", cache_dir).exists()
+            p = frame_cache_path(f, "api", cache_dir)
         except MissingRaw:  # never segmented, so never paid
-            pass
-    return cost_for("sam-3.1", images=n)
+            continue
+        if not p.exists():
+            todo.add(p)
+    return cost_for("sam-3.1", images=len(todo))
 
 
 def migrate_cache(
@@ -180,11 +188,15 @@ def segment_frames(
     stats = {"frames": len(frames), "segmented": 0, "cache_hits": 0, "errors": 0, "budget_blocked": 0, "missing_raw": 0}
     by_id = {t.id: t for t in cfg.trays}
 
+    locks: dict[Path, asyncio.Lock] = {}  # one in-flight call per cache entry: shared sources never pay twice
+
     async def one(sem: asyncio.Semaphore, f: sqlite3.Row) -> None:
         async with sem:
             try:
                 image, raw, fh = frame_source(f)
-                masks, hit = await segment_cached(backend, image, PROMPT, cache_dir, raw, fh)
+                lock = locks.setdefault(cache_path(image, PROMPT, backend.name, cache_dir, raw, fh), asyncio.Lock())
+                async with lock:
+                    masks, hit = await segment_cached(backend, image, PROMPT, cache_dir, raw, fh)
             except MissingRaw as e:
                 stats["missing_raw"] += 1
                 print(f"skipped {f['id']}: {e}")

@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS trays(
 CREATE TABLE IF NOT EXISTS frames(
   id TEXT PRIMARY KEY, tray_id TEXT, ts TEXT, path TEXT, cm2_per_px REAL, calib_flag TEXT,
   source TEXT,  -- dataset | fault_transform | fault_timewarp
-  fault_hash TEXT NULL  -- hash of (fault params, fault_start, FAULTS_VERSION) for derived frames
+  fault_hash TEXT NULL,  -- hash of (fault params, fault_start, FAULTS_VERSION) for derived frames
+  src_file TEXT NULL  -- tray C time-warp: file name of the real source frame (data/raw/aled or aled_src)
 );
 CREATE TABLE IF NOT EXISTS plants(
   id TEXT PRIMARY KEY, tray_id TEXT, first_seen_ts TEXT, label TEXT
@@ -85,6 +86,8 @@ def init_db(path: str | Path) -> sqlite3.Connection:
     cols = {r[1] for r in conn.execute("PRAGMA table_info(frames)")}
     if "fault_hash" not in cols:  # database created before the column existed
         conn.execute("ALTER TABLE frames ADD COLUMN fault_hash TEXT NULL")
+    if "src_file" not in cols:
+        conn.execute("ALTER TABLE frames ADD COLUMN src_file TEXT NULL")
     acols = {r[1] for r in conn.execute("PRAGMA table_info(alerts)")}
     for col in ("detail", "status", "first_ts", "last_ts"):
         if col not in acols:  # database created before the column existed

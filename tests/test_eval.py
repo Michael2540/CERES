@@ -527,7 +527,7 @@ def test_edge_role_is_not_built(source_db, tmp_path):
 def test_cli_dry_run_and_fake_need_no_real_db(source_db, tmp_path, capsys):
     assert re_.main(["--dry-run"]) == 0
     out = capsys.readouterr().out
-    assert "10 scenarios, 9 assessments" in out and "$0.90 to $1.80" in out
+    assert "11 scenarios, 9 assessments" in out and "$0.90 to $1.80" in out
     assert re_.main(["--fake"]) == 2  # never defaults to the real DB
     assert re_.main(["--fake", "--source-db", str(source_db), "--scenarios", "nominal_A", "--out-dir", str(tmp_path / "o")]) == 0
     assert (tmp_path / "o").glob("eval_*_fake.json")

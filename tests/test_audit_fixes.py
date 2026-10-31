@@ -435,7 +435,7 @@ def test_wilt_still_shrinks_reference_plants_inside_roi_plus_margin():
 def test_faults_version_bump_regenerates_b_but_not_c():
     assert FAULTS_VERSION == "wilt-4"
     assert fault_hash(B) != "68d47e8271be5cb8"  # the stored wilt-3 hash of tray B: ingest regenerates its frames
-    assert fault_hash(C) == "1a83404bcb416597"  # tray C's time-warp frames and masks stay valid
+    assert fault_hash(C) == "f39e9ea9fb595718"  # tray C's hash depends only on its own warp (TIMEWARP_VERSION)
     assert fault_hash(A) is None
     assert fault_hash(B.model_copy(update={"roi_margin_px": 10})) != fault_hash(B)
 

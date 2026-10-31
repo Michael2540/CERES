@@ -1,0 +1,17 @@
+id: camera_blackout_wilt
+description: >
+  Camera failure during a real (simulated) drought: tray B's WILT_RISK alert is open, and every frame of tray B from
+  2016-01-07T08:00Z to 2016-01-07T12:00Z is replaced by a black image with a canopy mask of area 0 (written straight
+  into the temp DB, no SAM call). The drought is still there (soil sensor), so underwatering stays the top cause,
+  but the agent must notice that its latest images are blank and name camera_fault among the causes considered.
+data_source: simulated         # injected black frames on top of the image-transform drought
+tray_id: B
+as_of: "2016-01-07T12:00:00Z"
+window: {start: "2016-01-05T08:00:00Z", end: "2016-01-07T12:00:00Z"}
+alert_rule: WILT_RISK
+injections:
+  - {type: occlude_frames, tray_id: B, start: "2016-01-07T08:00:00Z", end: "2016-01-07T12:00:00Z"}
+expected_top_cause: underwatering
+acceptable_causes: [underwatering]
+expected_alerts: ["WILT_RISK:B"]
+scoring: {camera_fault_considered: true}

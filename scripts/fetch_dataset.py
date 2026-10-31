@@ -6,6 +6,10 @@ ALED: Aberystwyth Leaf Evaluation Dataset, Zenodo 168158, CC BY 4.0.
 Trays PSI_Tray031..034 map to CERES trays A, B, C, L.
 
 Example: python scripts/fetch_dataset.py --trays A,B --with-masks
+
+--timewarp-sources fetches, into data/raw/aled_src, the real frames that stand in for tray C's low-light
+time-warp (backend/sim/faults.py): per mission frame after fault_start, the archive frame nearest to the warp
+target (imaging hours, never later than the mission frame). Mission frames (data/raw/aled) are not touched.
 """
 
 from __future__ import annotations
@@ -146,6 +150,38 @@ def list_members(url: str, out: Path) -> list[str]:
     return names
 
 
+IMAGING_HOURS = range(9, 21)  # UTC hours with a frame every ~13 min; the archive is sparse outside them
+
+
+def parse_mission_ts(filename: str, tray: str) -> datetime:
+    """<tray>_<YYYYmmddTHHMMSS>.jpg -> UTC datetime."""
+    return datetime.strptime(filename[len(tray) + 1 : -4], "%Y%m%dT%H%M%S").replace(tzinfo=UTC)
+
+
+def timewarp_source_jobs(
+    names: list[str], tray: str, mission_ts: list[datetime], fault_start: datetime, growth_factor: float, lamp=None
+) -> list[tuple[str, datetime]]:
+    """(archive member, ts) of every time-warp source that is not already a mission frame, one per distinct
+    source. Candidates are the tray's archive frames in imaging hours plus the mission frames themselves
+    (all of which the pipeline can pick from), chosen exactly as faults.timewarp_source_ts chooses."""
+    from backend.sim.faults import timewarp_source_ts
+
+    arch: dict[datetime, str] = {}
+    for n in names:
+        parsed = parse_member(n)
+        if parsed and parsed[0] == tray and parsed[1] == "rgb" and parsed[2].hour in IMAGING_HOURS:
+            arch[parsed[2]] = n
+    pool = sorted(set(arch) | set(mission_ts))
+    jobs: dict[datetime, str] = {}
+    for ts in mission_ts:
+        if ts < fault_start:
+            continue
+        src = timewarp_source_ts(ts, fault_start, growth_factor, pool, lamp)
+        if src not in mission_ts and src in arch:
+            jobs[src] = arch[src]
+    return [(m, t) for t, m in sorted(jobs.items())]
+
+
 def write_manifest(out: Path, rows: list[dict[str, str | int]]) -> None:
     mp = out / "manifest.csv"
     old: dict[tuple[str, str], dict] = {}
@@ -173,6 +209,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--gt", action="store_true")
     p.add_argument("--demo", action="store_true")
     p.add_argument("--limit", type=int, default=None)
+    p.add_argument("--timewarp-sources", action="store_true",
+                   help="fetch tray C's time-warp source frames into data/raw/aled_src")
+    p.add_argument("--mission-dir", default="data/raw/aled", help="mission frames (--timewarp-sources)")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--workers", type=int, default=6)
     a = p.parse_args(argv)
@@ -184,10 +223,26 @@ def main(argv: list[str] | None = None) -> int:
             out = Path("data/raw/aled_gt")
     width = 512 if a.demo else a.width
     want = {t.strip() for t in a.trays.split(",") if t.strip()}
-    names = list_members(ALED_URL, out)
+    if a.timewarp_sources and a.out == "data/raw/aled":
+        out = Path("data/raw/aled_src")
+    names = list_members(ALED_URL, Path(a.mission_dir) if a.timewarp_sources else out)
     gt_members = [n for n in names if (parse_member(n) or (None, None))[1] == "gt"]
     jobs: list[tuple[str, str, Path, str]] = []  # member, tray, dest, kind
-    if a.gt:
+    if a.timewarp_sources:
+        from backend.config import load_trays
+
+        for tr in load_trays().trays:
+            if tr.id not in want or tr.fault_start is None or tr.fault.growth_factor is None:
+                continue
+            mission = sorted(
+                parse_mission_ts(f.name, tr.id) for f in Path(a.mission_dir).glob(f"{tr.id}_*.jpg")
+            )
+            start = datetime.fromisoformat(tr.fault_start)
+            for member, dt in timewarp_source_jobs(names, tr.id, mission, start, tr.fault.growth_factor, tr.lamp):
+                dest = out / out_name(tr.id, dt)
+                if not dest.exists():
+                    jobs.append((member, tr.id, dest, "rgb"))
+    elif a.gt:
         for n in sorted(gt_members):
             parsed = parse_member(n)
             if parsed is None or parsed[0] not in want:

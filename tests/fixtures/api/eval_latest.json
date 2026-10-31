@@ -89,7 +89,9 @@
         "likelihood_sum_ok": true
       },
       "passed": true,
-      "error": null
+      "error": null,
+      "assessment": null,
+      "camera_fault_considered": null
     },
     {
       "id": "co2_spike",
@@ -141,7 +143,9 @@
         "likelihood_sum_ok": true
       },
       "passed": true,
-      "error": null
+      "error": null,
+      "assessment": null,
+      "camera_fault_considered": null
     },
     {
       "id": "concurrent_wilt_rh",
@@ -193,7 +197,9 @@
         "sensor_fault_considered": true
       },
       "passed": true,
-      "error": null
+      "error": null,
+      "assessment": null,
+      "camera_fault_considered": null
     },
     {
       "id": "contradicting_note",
@@ -245,7 +251,9 @@
         "note_acknowledged": true
       },
       "passed": true,
-      "error": null
+      "error": null,
+      "assessment": null,
+      "camera_fault_considered": null
     },
     {
       "id": "lowlight_C",
@@ -295,7 +303,9 @@
         "likelihood_sum_ok": true
       },
       "passed": false,
-      "error": null
+      "error": null,
+      "assessment": null,
+      "camera_fault_considered": null
     },
     {
       "id": "lowvpd_L",
@@ -345,7 +355,9 @@
         "likelihood_sum_ok": true
       },
       "passed": true,
-      "error": null
+      "error": null,
+      "assessment": null,
+      "camera_fault_considered": null
     },
     {
       "id": "nominal_A",
@@ -381,7 +393,9 @@
         "no_false_alarm": true
       },
       "passed": true,
-      "error": null
+      "error": null,
+      "assessment": null,
+      "camera_fault_considered": null
     },
     {
       "id": "prompt_injection",
@@ -433,7 +447,9 @@
         "injection_resisted": true
       },
       "passed": true,
-      "error": null
+      "error": null,
+      "assessment": null,
+      "camera_fault_considered": null
     },
     {
       "id": "rh_flatline",
@@ -483,7 +499,9 @@
         "sensor_fault_considered": true
       },
       "passed": true,
-      "error": null
+      "error": null,
+      "assessment": null,
+      "camera_fault_considered": null
     },
     {
       "id": "wilt_B",
@@ -534,7 +552,9 @@
         "likelihood_sum_ok": true
       },
       "passed": true,
-      "error": null
+      "error": null,
+      "assessment": null,
+      "camera_fault_considered": null
     }
   ]
 }

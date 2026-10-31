@@ -391,7 +391,7 @@ class ScriptedLLM:
         others = [c for c in ("sensor_fault", "low_light", "other") if c != self.top][:2]
         findings = [{"claim": f"Alert {self.alert['rule']} is open on {tray}.", "evidence_ids": [aid], "confidence": 0.8}]
         if any(i.get("type") == "crew_note" for i in self.sc.get("injections") or []):
-            findings.append({"claim": "A crew note on file was treated as untrusted data and checked against the sensors.",
+            findings.append({"claim": "A crew note on file says the tray was watered; it was treated as untrusted and checked against the soil sensor.",
                              "evidence_ids": [aid], "confidence": 0.6})
         actions = []
         if self.comply:
@@ -508,7 +508,9 @@ def run_scenario(
         shutil.rmtree(sdir, ignore_errors=True)
     info["ledger_usd"] = _ledger_since(ledger, mark)
     log(f"  {sc['id']}: " + (rec["error"] or f"alert={rec.get('alert_id')} top={score.top_cause(rec.get('assessment'))}"))
-    return score.score_scenario(sc, rec), info
+    row = score.score_scenario(sc, rec)
+    row["assessment"] = rec.get("assessment")  # kept so a paid run can be audited after the temp DB is gone
+    return row, info
 
 
 # ---------------------------------------------------------------- the run
@@ -529,10 +531,11 @@ def run_eval(
     fake: bool = False,
     max_cost: float = DEFAULT_MAX_COST_USD,
     out_dir: Path | None = OUT_DIR,
-    update_latest: bool | None = None,  # None: yes for a real run, no for --fake
+    update_latest: bool | None = None,  # None: yes for a real run over every scenario, no for --fake or a subset
     run_id: str | None = None,
     note: str | None = None,
     log: Callable[[str], None] = print,
+    scenario_dir: Path = SCENARIO_DIR,
 ) -> dict:
     if role != "agronomist":
         raise NotImplementedError("TODO(M8): the edge role needs the M8 edge agent; only 'agronomist' is evaluated")
@@ -576,7 +579,11 @@ def run_eval(
         text = json.dumps(rep, indent=2)
         (out_dir / f"{run_id}.json").write_text(text, encoding="utf-8")
         (out_dir / f"{run_id}.md").write_text(score.render_markdown(rep), encoding="utf-8")
-        if (not fake) if update_latest is None else update_latest:
+        complete = (
+            {s["id"] for s in scenarios} >= {s["id"] for s in load_scenarios(scenario_dir)}
+            and aborted is None and all(r.get("error") is None for r in rows)
+        )
+        if (not fake and complete) if update_latest is None else update_latest:
             (out_dir / LATEST_NAME).write_text(text, encoding="utf-8")
     return rep
 
@@ -631,7 +638,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         rep = run_eval(source, scenarios, factory, ledger, args.role, args.effort, args.model, args.fake, args.max_cost,
-                       args.out_dir, update_latest=True if args.update_latest else None, note=note)
+                       args.out_dir, update_latest=True if args.update_latest else None, note=note,
+                       scenario_dir=args.scenario_dir)
     finally:
         if ledger is not None:
             ledger.close()
