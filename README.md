@@ -113,6 +113,8 @@ Faults on trays B and C (image transform, low-light time-warp), every sensor rea
 
 ## Quick start
 
+A step-by-step presenter script covering every feature is in [DEMO_WALKTHROUGH.md](DEMO_WALKTHROUGH.md).
+
 **Offline demo (no `META_API_KEY`, no paid calls; after installing dependencies it runs without network).** Needs Python 3.11+ and Node 20+; `pip install` and `npm install` need network once.
 
 ```bash
