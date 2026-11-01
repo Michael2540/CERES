@@ -56,7 +56,7 @@ An LLM never raises an alert and never actuates: rules raise alerts, the agent e
 | `sam-3.1` | Meta Model API | Segments every tray frame into per-plant masks (text prompt "plant"). The masks feed canopy area, greenness and growth metrics. 844 frames segmented, cached so nothing is paid for twice. |
 | `muse-spark-1.3` | Meta Model API | **Flight Agronomist.** A tool-calling agent that investigates alerts across sensor series, canopy metrics and tray images, and returns a strict-JSON assessment. Its citations are validated and it gets one retry. |
 | `muse-spark-1.3-contributor` | Meta Model API | Mars-mode edge triage (recorded demo runs and the edge eval), plus development runs at lower cost |
-| Muse Code (`muse` CLI) | Meta's coding agent | Wrote the ALED dataset fetcher (`scripts/fetch_dataset.py`) and did a read-only review of the M0 scaffold. See [MUSE_CODE.md](MUSE_CODE.md). |
+| Muse Code (`muse` CLI) | Meta's coding agent | Wrote the ALED dataset fetcher (`scripts/fetch_dataset.py`) and did a read-only review of the M0 scaffold. See [HACKATHON.md](HACKATHON.md). |
 
 Switchable: the Mars-mode edge model (`EDGE_MODE=recorded|remote_glimmer|spark_contributor`, default `recorded`). The demo replays edge runs recorded with `muse-spark-1.3-contributor` (no model runs on the habitat computer), and every badge names that model and says RECORDED. Pointing `remote_glimmer` at a hosted Glimmer endpoint is a config change.
 
@@ -69,7 +69,7 @@ Switchable: the Mars-mode edge model (`EDGE_MODE=recorded|remote_glimmer|spark_c
 | Mars-mode edge triage (3 tools, 1 image) | `muse-spark-1.3-contributor` | one run per queued alert | $0.0026 per run (latest edge eval) | backend/eval/out/latest_edge.json |
 | Mars-mode audit | none: computed in code | | $0 | backend/link/audit.py |
 
-Muse Code (`muse-spark-1.3-contributor`) wrote the dataset fetcher and reviewed the M0 scaffold; later milestone reviews were done by independent Claude Sonnet agents. The Meta spend while building is tracked in [PROGRESS.md](PROGRESS.md) (cap $150).
+Muse Code (`muse-spark-1.3-contributor`) wrote the dataset fetcher and reviewed the M0 scaffold; later milestone reviews were done by independent Claude Sonnet agents. The Meta spend while building is logged in [HACKATHON.md](HACKATHON.md) (cap $150).
 
 ## What is real and what is simulated
 
@@ -113,7 +113,6 @@ Faults on trays B and C (image transform, low-light time-warp), every sensor rea
 
 ## Quick start
 
-A step-by-step presenter script covering every feature is in [DEMO_WALKTHROUGH.md](DEMO_WALKTHROUGH.md).
 
 **Offline demo (no `META_API_KEY`, no paid calls; after installing dependencies it runs without network).** Needs Python 3.11+ and Node 20+; `pip install` and `npm install` need network once.
 
@@ -160,7 +159,7 @@ Tests: `make test` (backend), `make lint`, `cd web && npx playwright test`.
 
 ## Results
 
-Small n throughout, and prompts were revised on these same scenarios (history in [PROGRESS.md](PROGRESS.md)). Read them as examples, not accuracy. The numbers below are copied from the committed reports in `backend/eval/out/`.
+Small n throughout, and prompts were revised on these same scenarios (every run's report is committed in `backend/eval/out/`). Read them as examples, not accuracy. The numbers below are copied from the committed reports in `backend/eval/out/`.
 
 **SAM 3.1 against ALED hand annotation** (`area_validation.json`, 55 real, untransformed frames; the colour trim was tuned on the same frames):
 

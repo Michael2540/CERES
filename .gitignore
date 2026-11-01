@@ -43,3 +43,14 @@ data/derived/
 .index.json
 
 web/.next-*
+
+# Local-only docs (kept on disk, never committed; README.md and HACKATHON.md are tracked)
+/AGENTS.md
+/API.md
+/CLAUDE.md
+/DEMO_VIDEO.md
+/DEMO_WALKTHROUGH.md
+/MUSE_CODE.md
+/PLAN.md
+/PROGRESS.md
+/SPIKES.md
