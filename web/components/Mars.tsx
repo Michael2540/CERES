@@ -89,7 +89,7 @@ function QueueCard({ item: it }: { item: QueueItem }) {
         </p>
       )}
       {e && <EdgeCard item={it} asOf={asOf} unverified={unverified} />}
-      {it.audit_json && <AuditCard audit={it.audit_json} earthId={it.earth_assessment_id} />}
+      {it.audit_json && <AuditCard audit={it.audit_json} earthId={it.earth_assessment_id} earth={it.earth_provenance ?? null} />}
       {!e && !it.error && <p className="mt-1 text-xs text-slate-500">No edge triage for this item.</p>}
       <p className="mt-1 text-[10px] text-slate-500" data-testid="perception-note">
         Perception is not re-run: {it.perception}.
@@ -209,7 +209,7 @@ function EdgeCard({ item: it, asOf, unverified }: { item: QueueItem; asOf: strin
   );
 }
 
-function AuditCard({ audit: a, earthId }: { audit: Audit; earthId: string | null }) {
+function AuditCard({ audit: a, earthId, earth }: { audit: Audit; earthId: string | null; earth: { recorded: boolean; model: string } | null }) {
   const delta = a.urgency_delta;
   const meaningless = a.agree === null;
   return (
@@ -223,6 +223,14 @@ function AuditCard({ audit: a, earthId }: { audit: Audit; earthId: string | null
           {meaningless ? (a.notes.includes("audit not meaningful") ? "audit not meaningful (edge/Earth answer failed validation)" : "not compared") : a.agree ? "agree" : "disagree"}
         </span>
         <span className="text-[11px] italic text-slate-400" data-testid="audit-label">computed by code, not by a model</span>
+        {earth && (
+          <span
+            className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${earth.recorded ? "bg-violet-900 text-violet-200" : "bg-red-900 text-red-200"}`}
+            data-testid={earth.recorded ? "earth-recorded" : "earth-live"}
+          >
+            {earth.recorded ? `RECORDED · EARTH (${earth.model})` : `LIVE · EARTH (${earth.model})`}
+          </span>
+        )}
       </div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
         <dt className="text-slate-500">Cause</dt>
@@ -305,7 +313,9 @@ export function DrainBox() {
   return (
     <Panel title="Send to Earth (drain)">
       <p className="text-xs text-slate-400">
-        Delivering the queue runs the Earth-side Flight Agronomist, a paid Meta call (about $0.10-0.20 per item). Planning is free; nothing is sent until you confirm.
+        {link?.demo_mode
+          ? "Delivering the queue replays the recorded Earth-side Flight Agronomist runs (free, no network). An item without a recording fails with a clear message."
+          : "Delivering the queue runs the Earth-side Flight Agronomist, a paid Meta call (about $0.10-0.20 per item). Planning is free; nothing is sent until you confirm."}
       </p>
       {(phase === "idle" || phase === "planning") && (
         <button
@@ -321,7 +331,7 @@ export function DrainBox() {
         <div className="mt-2 rounded border border-amber-500/70 bg-amber-950/40 p-2" data-testid="drain-plan-box">
           <p className="text-sm text-amber-100" data-testid="drain-plan-summary">
             {n} item{n === 1 ? "" : "s"} deliverable over a {plan.link_state} link. Estimated cost ${plan.est_cost_usd.low.toFixed(2)}-$
-            {plan.est_cost_usd.high.toFixed(2)} (paid, Meta Muse Spark).
+            {plan.est_cost_usd.high.toFixed(2)} {link?.demo_mode ? "(recorded runs: free)" : "(paid, Meta Muse Spark)."}
           </p>
           {plan.detail && <p className="mt-0.5 text-xs text-amber-200/80" data-testid="drain-detail">{plan.detail}</p>}
           {phase !== "started" && n > 0 && (

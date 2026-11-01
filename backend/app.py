@@ -46,6 +46,8 @@ def _hour(dt: datetime) -> datetime:
 
 def cycle_once(as_of: datetime) -> None:
     """One pipeline cycle on its own connection (runs in a worker thread)."""
+    if load_settings().demo_mode:
+        return  # the demo DB is a fixed, precomputed timeline: alerts and metrics are never recomputed
     conn = deps.open_db()
     try:
         live_seg = os.getenv("CERES_LIVE_SEGMENT") == "1"

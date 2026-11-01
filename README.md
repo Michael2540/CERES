@@ -9,6 +9,10 @@
 - [ ] **Build for Your World**: bring Meta's models into a domain we know firsthand.
 - [x] **Push the Frontier**: use Meta's models on challenges in software, robotics, manufacturing, energy, materials, and beyond.
 
+## The problem
+
+Fresh crops will supplement astronaut diets on long missions, but crew time is scarce, a plant that wilts overnight is easy to miss, and on Mars a question to Earth takes minutes each way. A crop-health system there has to (1) measure plants itself, (2) raise alerts without a model guessing, (3) explain an alert with evidence a human can check, (4) keep working when the Earth link is down, and (5) never act on its own. CERES is a software-only prototype of that system, built on real greenhouse images with labelled, simulated faults.
+
 ## Overview
 
 Fresh crops will supplement astronaut diets on long missions, but crew time is scarce. On Mars, a question to Earth takes minutes each way. CERES is a crop-health copilot for a spacecraft greenhouse:
@@ -18,7 +22,56 @@ Fresh crops will supplement astronaut diets on long missions, but crew time is s
 - **Investigates** each alert with a **Muse Spark** "Flight Agronomist". It calls tools, compares against the control tray, looks at frames, and returns ranked probable causes. Every piece of evidence it cites is machine-checked against what its tools actually returned.
 - **Proposes, never actuates.** Recommended actions wait for a human to approve them.
 
-### What is real and what is simulated
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph P[Perception: code + SAM 3.1]
+    F[ALED frames<br/>trays A B C L] --> S[sam-3.1 masks<br/>cached, colour-trimmed]
+    S --> M[canopy area, greenness,<br/>per-pot growth]
+  end
+  SEN[Simulated sensor hub<br/>temp, RH, CO2, soil] --> R
+  M --> R[Deterministic rules<br/>WILT, GROWTH_LAG,<br/>LOW_VPD, SENSOR_FAULT]
+  R -->|alert| A[Flight Agronomist<br/>muse-spark-1.3 + 8 logged tools]
+  A --> H{Hallucination checks<br/>citations from this run's tools,<br/>numbers found in tool results,<br/>no unbacked crew claims}
+  H --> UI[Dashboard: Next.js<br/>LIVE / RECORDED badges,<br/>human Approve / Reject]
+  subgraph MARS[Mars mode]
+    L[Simulated link<br/>up, delayed, down] --> Q[Queue]
+    Q --> ED[Edge triage<br/>muse-spark-1.3-contributor<br/>recorded replay]
+    ED --> AU[Audit vs the Earth answer<br/>computed by code]
+  end
+  R -->|link not up| Q
+  Q -->|drain, confirmed| A
+  A --> AU
+  AU --> UI
+  ED --> UI
+```
+
+An LLM never raises an alert and never actuates: rules raise alerts, the agent explains them, a human approves actions. In `DEMO_MODE` the two model boxes read recordings (`data/demo/agent_runs`, `data/demo/edge_runs`) through the same orchestrator and the same checks.
+
+## Meta Models Used
+
+| Model | Access | Role in CERES |
+|---|---|---|
+| `sam-3.1` | Meta Model API | Segments every tray frame into per-plant masks (text prompt "plant"). The masks feed canopy area, greenness and growth metrics. 844 frames segmented, cached so nothing is paid for twice. |
+| `muse-spark-1.3` | Meta Model API | **Flight Agronomist.** A tool-calling agent that investigates alerts across sensor series, canopy metrics and tray images, and returns a strict-JSON assessment. Its citations are validated and it gets one retry. |
+| `muse-spark-1.3-contributor` | Meta Model API | Mars-mode edge triage (recorded demo runs and the edge eval), plus development runs at lower cost |
+| Muse Code (`muse` CLI) | Meta's coding agent | Wrote the ALED dataset fetcher (`scripts/fetch_dataset.py`) and did a read-only review of the M0 scaffold. See [MUSE_CODE.md](MUSE_CODE.md). |
+
+Switchable: the Mars-mode edge model (`EDGE_MODE=recorded|remote_glimmer|spark_contributor`, default `recorded`). The demo replays edge runs recorded with `muse-spark-1.3-contributor` (no model runs on the habitat computer), and every badge names that model and says RECORDED. Pointing `remote_glimmer` at a hosted Glimmer endpoint is a config change.
+
+## Model routing and cost
+
+| Task | Model (Meta Model API) | Calls | Measured cost | Source |
+|---|---|---|---|---|
+| Plant segmentation | `sam-3.1` | 844 frames, cached | $1.95 for all 844 | PROGRESS.md (full SAM batch) |
+| Earth-side Flight Agronomist (tools, images, strict JSON) | `muse-spark-1.3`, low reasoning effort | one run per alert | $0.103 per assessment (latest eval run) | backend/eval/out/latest.json |
+| Mars-mode edge triage (3 tools, 1 image) | `muse-spark-1.3-contributor` | one run per queued alert | $0.0026 per run (latest edge eval) | backend/eval/out/latest_edge.json |
+| Mars-mode audit | none: computed in code | | $0 | backend/link/audit.py |
+
+Muse Code (`muse-spark-1.3-contributor`) wrote the dataset fetcher and reviewed the M0 scaffold; later milestone reviews were done by independent Claude Sonnet agents. The Meta spend while building is tracked in [PROGRESS.md](PROGRESS.md) (cap $150).
+
+## What is real and what is simulated
 
 CERES runs entirely in software, without hardware:
 
@@ -30,18 +83,11 @@ CERES runs entirely in software, without hardware:
 | Sensors (temperature, RH, CO₂, soil moisture) | **Simulated** by a deterministic sensor hub, including an injected RH-sensor flatline |
 | Agent assessments | **Real** Muse Spark calls. The agent is deliberately not told which inputs are simulated, so it is tested blind. |
 | Mars link and light delay | **Simulated** (scaled wall-clock seconds; the real one-way delay is 3–22 min) |
-| Edge triage in Mars mode | **Real model output, replayed.** Recorded with `muse-spark-1.3-contributor` through the remote API; it stands in for an on-board model (Muse Glimmer cannot run on our laptop). Nothing is labelled on-board. |
+| Edge triage in Mars mode | **Real model output, replayed.** Recorded with `muse-spark-1.3-contributor` through the remote API; it stands in for an on-board model. Nothing is labelled on-board. |
 
-## Meta Models Used
+## What is simulated
 
-| Model | Access | Role in CERES |
-|---|---|---|
-| `sam-3.1` | Meta Model API | Segments every tray frame into per-plant masks (text prompt "plant"). The masks feed canopy area, greenness and growth metrics. 844 frames segmented, cached so nothing is paid for twice. |
-| `muse-spark-1.3` | Meta Model API | **Flight Agronomist.** A tool-calling agent that investigates alerts across sensor series, canopy metrics and tray images, and returns a strict-JSON assessment. Its citations are validated and it gets one retry. |
-| `muse-spark-1.3-contributor` | Meta Model API | Mars-mode edge triage (recorded demo runs and the edge eval), plus development runs at lower cost |
-| Muse Code (`muse` CLI) | Meta's coding agent | Wrote the ALED dataset fetcher (`scripts/fetch_dataset.py`) and reviewed milestones. See [MUSE_CODE.md](MUSE_CODE.md). |
-
-Switchable: the Mars-mode edge model (`EDGE_MODE=recorded|remote_glimmer|spark_contributor`, default `recorded`). Muse Glimmer 30B cannot run on our development laptop, so the demo replays edge runs recorded with `muse-spark-1.3-contributor`, and every badge names that model and says RECORDED. Pointing `remote_glimmer` at a hosted Glimmer endpoint is a config change.
+Faults on trays B and C (image transform, low-light time-warp), every sensor reading, the tray L humidity rise, the RH-sensor flatline, the mission clock, and the Earth-Mars link and its delay. The plant images and the SAM 3.1 measurements are real; the agent is not told which inputs are simulated. Details in the table above.
 
 ## Built During the Hackathon
 
@@ -62,21 +108,33 @@ Switchable: the Mars-mode edge model (`EDGE_MODE=recorded|remote_glimmer|spark_c
 
 ## Demo
 
-- **Demo video (3 min):** _link coming soon_
-- **Live product:** runs locally (see below)
+- **Demo video (3 min):** _link coming soon_ <!-- placeholder: add the GIF/video link here -->
+- **Live product:** `make demo` (offline replay) or `make dev` (live, with a key)
 
-## Getting Started
+## Quick start
 
-Requires Python 3.11+ and Node 20+.
+**Offline demo (no `META_API_KEY`, no paid calls; after installing dependencies it runs without network).** Needs Python 3.11+ and Node 20+; `pip install` and `npm install` need network once.
 
 ```bash
-git clone https://github.com/Michael2540/CERES.git
-cd CERES
-cp .env.example .env                 # add META_API_KEY
-python -m venv .venv && .venv/Scripts/python -m pip install -e .[dev]   # use .venv/bin/python on macOS/Linux
+python -m venv .venv && .venv/Scripts/python -m pip install -e .[dev]   # .venv/bin/python on macOS/Linux
+make demo        # seeds data/demo.db, backend on :8000, dashboard on http://localhost:3000
 ```
 
-Build the demo database:
+Every model-backed view (agent panel, Mars cards, queue drain) is replayed from `data/demo/` and labelled **RECORDED**; the replay re-runs the citation and numeric-grounding checks. An alert without a recording answers "no recorded run for this alert in demo mode" (HTTP 409); nothing falls back to a live call. Suggested path: set the clock to 2016-01-07 12:00, open tray B, click the WILT_RISK alert, then take the link down in the header and queue alerts on `/mars`.
+
+Without `make` (the two commands behind it, in Git Bash or a POSIX shell; in PowerShell set the variables with `$env:NAME = "value"` first):
+
+```bash
+.venv/Scripts/python scripts/seed_demo.py
+DB_PATH=data/demo.db DEMO_MODE=1 EDGE_MODE=recorded IMAGES_ROOT=data/demo/frames .venv/Scripts/python -m uvicorn backend.app:app --port 8000
+# second terminal
+cd web && npm install && npm run dev
+```
+
+**Live (needs a key and the full dataset).** `cp .env.example .env`, set `META_API_KEY`, build the database below, then `make dev` and `cd web && npm run dev`. "Investigate with Muse Spark" then makes one paid, **LIVE** call to `muse-spark-1.3` (about $0.10-0.20).
+
+### Full rebuild from the dataset
+
 
 ```bash
 python scripts/fetch_dataset.py --with-masks       # free; ~170 MB of sampled ALED frames into data/raw/
@@ -87,7 +145,7 @@ python scripts/backfill_pots.py                    # assigns plants to pots (no 
 python scripts/replay.py --backend none            # simulated sensors + hour-by-hour rule replay
 ```
 
-Run it:
+Run it live:
 
 ```bash
 make dev                         # backend on http://localhost:8000
@@ -97,6 +155,24 @@ cd web && npm install && npm run dev    # dashboard on http://localhost:3000
 "Investigate with Muse Spark" in the dashboard makes one live, paid call to `muse-spark-1.3`. It costs about $0.10–0.20.
 
 Tests: `make test` (backend), `make lint`, `cd web && npx playwright test`.
+
+## Results
+
+Small n throughout, and prompts were revised on these same scenarios (history in [PROGRESS.md](PROGRESS.md)). Read them as examples, not accuracy. The numbers below are copied from the committed reports in `backend/eval/out/`.
+
+**SAM 3.1 against ALED hand annotation** (`area_validation.json`, 55 real, untransformed frames; the colour trim was tuned on the same frames):
+
+| Method | Dice | Area error (MAPE) | Per-pot r (instances) | Plant count exact |
+|---|---|---|---|---|
+| SAM 3.1 + colour trim (used) | 0.9392 | 5.39% | 0.9719 | 74.55% |
+| SAM 3.1 raw masks | 0.8785 | 29.27% | 0.9737 | 74.55% |
+| Colour-threshold baseline | 0.8931 | 15.92% | 0.2363 | 60.0% |
+
+**Flight Agronomist eval** (`latest.json`, run `eval_20261031T133957Z`, `muse-spark-1.3`, low effort, 11 scenarios, 9 raise an alert): 11/11 pass, top-1 cause 9/9, citation validity 9/9, schema validity 9/9, injection resistance 1/1, numeric grounding 8/9, false alarms on the nominal tray 0/2, p50 latency 32.9 s (one outlier: co2_spike took 871 s; cause not diagnosed), $0.103 per assessment.
+
+**Edge triage eval** (`latest_edge.json`, run `eval_edge_20261031T130501Z`, `muse-spark-1.3-contributor`): 9/9 pass, top-1 cause 9/9, citation 9/9, schema 9/9, numeric grounding 9/9, injection resistance 1/1, urgency sanity 7/7, p50 latency 29.8 s.
+
+Caveat: one instance per fault; the first agronomist run scored 6/9 on top cause, and the fixes (a simulation flaw, a broken scenario, a system-prompt rule) are on record in PROGRESS.md. The /trust page shows the same tables, each labelled RECORDED RUN with its run id and date.
 
 ## Limitations
 
@@ -114,6 +190,6 @@ Tests: `make test` (backend), `make lint`, `cd web && npx playwright test`.
 |---|---|---|
 | Michael Yan | [@Michael2540](https://github.com/Michael2540) | Everything |
 
-## Acknowledgements and License
+## Licenses
 
-CERES is [MIT](LICENSE) licensed. Plant images: Bell, J. & Dee, H. M. (2016), *Aberystwyth Leaf Evaluation Dataset*, [doi:10.5281/zenodo.168158](https://doi.org/10.5281/zenodo.168158), CC BY 4.0. They are adapted (subsampled, downscaled, and partly transformed to simulate faults). See [NOTICE](NOTICE) for full attributions and third-party terms.
+CERES is [MIT](LICENSE) licensed. Plant images: Bell, J. & Dee, H. M. (2016), *Aberystwyth Leaf Evaluation Dataset*, [doi:10.5281/zenodo.168158](https://doi.org/10.5281/zenodo.168158), CC BY 4.0. Adapted: subsampled, downscaled, and partly transformed to simulate faults. **The demo bundle in `data/demo/frames` contains downscaled (640 px wide) ALED frames, including the labelled simulated-fault versions for trays B and C.** See [NOTICE](NOTICE) and [HACKATHON.md](HACKATHON.md) for third-party software and terms.

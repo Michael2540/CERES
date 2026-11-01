@@ -261,6 +261,10 @@ export type LinkInfo = {
   /** The Earth-side Flight Agronomist model. */
   earth_model: string;
   edge_recordings: string[];
+  /** DEMO_MODE: every model result is replayed from a recording; no live call is possible. */
+  demo_mode?: boolean;
+  /** DEMO_MODE: alerts with a recorded Earth-side run (the others answer 409). */
+  agent_recordings?: string[];
 };
 
 export type EdgeTriage = {
@@ -307,6 +311,8 @@ export type QueueItem = {
   grounding: Grounding[] | null;
   audit_json: Audit | null;
   earth_assessment_id: string | null;
+  /** LIVE or RECORDED, and the model that answered, from the Earth-side assessments row. */
+  earth_provenance?: { recorded: boolean; model: string; provider: string } | null;
   deliverable: boolean;
   deliver_in_s: number | null;
   error: string | null;

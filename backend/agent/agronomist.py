@@ -28,12 +28,12 @@ from typing import Any
 
 import cv2
 
-from backend.agent import grounding
+from backend.agent import grounding, replay
 from backend.agent.llm_client import ChatResult, LLMClient, resolve_role
 from backend.agent.tools import TOOL_SCHEMAS, ToolContext, log_error_call, run_tool, set_logged_ids
 from backend.agent.validate import assessment_schema, validate
 from backend.api.alerts import visible_alerts
-from backend.config import ROOT, load_trays
+from backend.config import ROOT, frame_file, load_settings, load_trays
 from backend.timeutil import iso_z
 
 log = logging.getLogger(__name__)
@@ -78,7 +78,7 @@ def touch(conn: sqlite3.Connection, aid: str) -> None:
 
 def image_part(path: str | Path) -> dict | None:
     """JPEG data-URL part, downscaled to <= MAX_IMAGE_WIDTH px wide. None if the file cannot be read."""
-    img = cv2.imread(str(ROOT / path))
+    img = cv2.imread(str(frame_file(path)))
     if img is None:
         return None
     h, w = img.shape[:2]
@@ -131,6 +131,10 @@ def begin(conn: sqlite3.Connection, alert_id: str, as_of: datetime, role: str = 
     """Create the assessments row (model, provider, recorded=false) and return its id."""
     alert = find_alert(conn, alert_id, as_of)
     cfg = resolve_role(role)
+    model, provider, recorded = cfg.model, cfg.provider, 0
+    if role == "agronomist" and load_settings().demo_mode:  # DEMO_MODE: a recording or a clear refusal, never a live call
+        rec = replay.load_recording(alert_id, as_of)  # NoAgentRecording before any row is written
+        model, provider, recorded = rec["model"], rec["provider"], 1
     base = f"asmt_{alert['tray_id']}_{iso_z(as_of).replace('-', '').replace(':', '')}"
     aid, k = base, 1
     while conn.execute("SELECT 1 FROM assessments WHERE id = ?", (aid,)).fetchone():
@@ -138,8 +142,8 @@ def begin(conn: sqlite3.Connection, alert_id: str, as_of: datetime, role: str = 
         aid = f"{base}_{k}"
     conn.execute(
         "INSERT INTO assessments(id, ts, tray_id, alert_id, model, provider, json, citation_errors, valid,"
-        " latency_ms, cost_usd, recorded, updated_at, role) VALUES (?,?,?,?,?,?,NULL,NULL,NULL,NULL,0,0,?,?)",
-        (aid, iso_z(as_of), alert["tray_id"], alert_id, cfg.model, cfg.provider, time.time(), role),
+        " latency_ms, cost_usd, recorded, updated_at, role) VALUES (?,?,?,?,?,?,NULL,NULL,NULL,NULL,0,?,?,?)",
+        (aid, iso_z(as_of), alert["tray_id"], alert_id, model, provider, recorded, time.time(), role),
     )
     conn.commit()
     return aid
@@ -187,11 +191,21 @@ def run(
 ) -> None:
     emit = on_event or (lambda _e, _d: None)
     t0 = time.perf_counter()
+    runner = None
     try:
-        llm = llm or (llm_factory or LLMClient)(conn)  # inside the try: a missing key is recorded, not lost
-        row = conn.execute("SELECT alert_id FROM assessments WHERE id = ?", (aid,)).fetchone()
+        row = conn.execute("SELECT alert_id, recorded FROM assessments WHERE id = ?", (aid,)).fetchone()
+        if row is not None and row["recorded"] and role == "agronomist" and load_settings().demo_mode:
+            # replay: the recorded responses and tool results go through the same orchestrator and validators
+            settings = load_settings()
+            rec = replay.rebind(replay.load_recording(row["alert_id"], as_of), aid)
+            llm = replay.ReplayLLM(rec, settings.replay_pace_s)
+            runner = replay.ReplayTools(rec, settings.replay_pace_s)
+        else:
+            llm = llm or (llm_factory or LLMClient)(conn)  # inside the try: a missing key is recorded, not lost
         alert = find_alert(conn, row["alert_id"], as_of)
-        _investigate(conn, aid, alert, as_of, role, emit, llm, t0)
+        _investigate(conn, aid, alert, as_of, role, emit, llm, t0, runner)
+        if runner is not None and (not runner.exhausted() or llm.queue):
+            raise replay.ReplayMismatch("the recording has calls or responses this run did not use")
     except Exception as exc:
         log.exception("assessment %s failed", aid)
         _fail(conn, aid, f"{type(exc).__name__}: {exc}", t0, _total_cost(conn, aid))
@@ -238,7 +252,8 @@ def _parse_json(text: str) -> tuple[dict | None, str | None]:
 
 
 def _investigate(
-    conn: sqlite3.Connection, aid: str, alert: dict, as_of: datetime, role: str, emit: Event, llm: Any, t0: float
+    conn: sqlite3.Connection, aid: str, alert: dict, as_of: datetime, role: str, emit: Event, llm: Any, t0: float,
+    runner: replay.ReplayTools | None = None,
 ) -> None:
     cfg = resolve_role(role)
     trays = {t.id: t for t in load_trays().trays}
@@ -252,7 +267,7 @@ def _investigate(
         ctx.round = rnd
         if announce:
             emit("tool_call", {"round": rnd, "tool": tool, "args": args})
-        result, ids = run_tool(ctx, tool, args)
+        result, ids = runner.run(ctx, tool, args) if runner else run_tool(ctx, tool, args)
         touch(conn, aid)
         if announce:
             emit("tool_result", {"round": rnd, "tool": tool, "ids": ids})
@@ -311,9 +326,10 @@ def _investigate(
                 result, ids = call(name, args, rnd, announce=False)
                 run_calls.append((tc, name, args, result, ids, ctx.last_log_rowid))
         refs = {r["id"]: r for _tc, _n, _a, res_, _i, _r in run_calls for r in res_.get("frame_refs", [])}
-        parts, labels, seen = allocate_images(conn, list(refs.values()), used_frames, cfg.image_cap)
+        # replay: no model sees the images, and the recorded returned ids are already the attached frames only
+        parts, labels, seen = ([], [], set()) if runner else allocate_images(conn, list(refs.values()), used_frames, cfg.image_cap)
         for _tc, name, args, result, ids, rowid in run_calls:
-            if "frame_refs" in result:
+            if "frame_refs" in result and not runner:
                 for r in result["frame_refs"]:
                     r["attached"] = r["id"] in seen
                 miss = [r["id"] for r in result["frame_refs"] if not r["attached"]]
@@ -355,10 +371,10 @@ def _investigate(
 
     latency = int((time.perf_counter() - t0) * 1000)
     conn.execute(
-        "UPDATE assessments SET json = ?, citation_errors = ?, valid = ?, latency_ms = ?, cost_usd = ?, recorded = 0"
+        "UPDATE assessments SET json = ?, citation_errors = ?, valid = ?, latency_ms = ?, cost_usd = ?, recorded = ?"
         " WHERE id = ?",
         (json.dumps(assessment) if assessment is not None else None, json.dumps(errors), 0 if errors else 1,
-         latency, meter.cost, aid),
+         latency, meter.cost, 1 if runner else 0, aid),
     )
     if errors:
         _supersede(conn, aid)
@@ -367,4 +383,4 @@ def _investigate(
         grounding.store_warnings(conn, aid, assessment, alert)
     except Exception:
         log.exception("grounding check failed for %s", aid)
-    emit("assessment", {"assessment_id": aid, "valid": not errors, "latency_ms": latency, "recorded": False})
+    emit("assessment", {"assessment_id": aid, "valid": not errors, "latency_ms": latency, "recorded": runner is not None})

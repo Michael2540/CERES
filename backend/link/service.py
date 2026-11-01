@@ -18,7 +18,7 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
-from backend.agent import agronomist
+from backend.agent import agronomist, replay
 from backend.api.alerts import visible_alerts
 from backend.config import load_settings
 from backend.link import audit, delay_sim, edge, queue
@@ -136,6 +136,8 @@ def drain(conn: sqlite3.Connection, now: float | None = None, max_items: int | N
         except BudgetExceeded as exc:
             queue.update(conn, iid, status="failed", error=f"BudgetExceeded: {exc}")
             stop = True
+        except replay.NoAgentRecording as exc:  # DEMO_MODE without a recording for this item: a clear failed state
+            queue.update(conn, iid, status="failed", error=str(exc))
         except Exception as exc:  # noqa: BLE001
             queue.update(conn, iid, status="failed", error=f"{type(exc).__name__}: {exc}")
         cur = queue.get(conn, iid)

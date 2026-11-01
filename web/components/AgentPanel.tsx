@@ -67,7 +67,9 @@ type Row = { key: number; kind: "call" | "result"; round: number; tool: string; 
 type Phase = "idle" | "confirm" | "starting" | "streaming" | "loading" | "running" | "done" | "unavailable" | "error";
 
 function PanelBody({ alert }: { alert: AlertItem }) {
-  const { asOf, hourKey, refreshSpend, setFocus } = useMission();
+  const { asOf, hourKey, refreshSpend, setFocus, link } = useMission();
+  const demo = link?.demo_mode === true;
+  const noRecording = demo && link?.agent_recordings !== undefined && !link.agent_recordings.includes(alert.id);
   const router = useRouter();
   const path = usePathname();
   const [phase, setPhase] = useState<Phase>(alert.assessment_id ? "loading" : "idle");
@@ -234,7 +236,7 @@ function PanelBody({ alert }: { alert: AlertItem }) {
   const terminal = result !== null && result.valid !== null;
   const failed = result !== null && result.valid !== null && (result.valid === false || a === null);
   const unverified = result?.valid === false;
-  const showStart = !result && (phase === "idle" || phase === "confirm" || phase === "starting");
+  const showStart = !result && !noRecording && (phase === "idle" || phase === "confirm" || phase === "starting");
   const showForce = failed && phase === "done";
   const showConfirm = phase === "confirm" || phase === "starting";
 
@@ -249,12 +251,19 @@ function PanelBody({ alert }: { alert: AlertItem }) {
         </div>
       </div>
 
+      {noRecording && !result && (
+        <p className="rounded border border-slate-600 bg-slate-900 p-2 text-slate-300" data-testid="no-recording">
+          No recorded run for this alert in demo mode. Nothing is invented and no live call is made.
+        </p>
+      )}
       {(showStart || showForce || showConfirm) && (
         <div>
           {showConfirm ? (
             <div className="rounded border border-amber-500/70 bg-amber-950/40 p-2" data-testid="confirm-box">
               <p className="text-amber-200">
-                {forceRun ? "Force re-run: " : ""}This calls Meta&apos;s Muse Spark live. Estimated cost {COST_ESTIMATE}, about 30-60 s.
+                {demo
+                  ? "DEMO MODE: this replays a recorded Muse Spark run (no network, no cost) and re-checks it."
+                  : <>{forceRun ? "Force re-run: " : ""}This calls Meta&apos;s Muse Spark live. Estimated cost {COST_ESTIMATE}, about 30-60 s.</>}
               </p>
               <div className="mt-2 flex gap-2">
                 <button
@@ -295,9 +304,9 @@ function PanelBody({ alert }: { alert: AlertItem }) {
                 className="w-full rounded border border-emerald-500 bg-emerald-950 px-3 py-2 font-semibold text-emerald-200 hover:bg-emerald-900"
                 data-testid="investigate"
               >
-                Investigate with Muse Spark ({COST_ESTIMATE})
+                {demo ? "Replay recorded Muse Spark investigation" : `Investigate with Muse Spark (${COST_ESTIMATE})`}
               </button>
-              <p className="mt-1 text-xs text-slate-500">Nothing is sent until you confirm.</p>
+              <p className="mt-1 text-xs text-slate-500">{demo ? "Replayed from a recording, labelled RECORDED." : "Nothing is sent until you confirm."}</p>
             </>
           )}
         </div>

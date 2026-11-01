@@ -98,8 +98,11 @@ test("trust page", async ({ page }) => {
   await expect(page.getByText(/lettuce/i)).toHaveCount(0);
   await expect(page.getByText("the measurement is real; the input fault is simulated.")).toBeVisible();
   await expect(page.getByTestId("blind-note")).toContainText("deliberately not told which inputs are simulated");
-  await expect(page.getByText("Built with Muse Spark · SAM 3.1")).toBeVisible();
-  await expect(page.getByText("Images: Aberystwyth Leaf Evaluation Dataset (CC BY 4.0)")).toBeVisible();
+  await expect(page.getByText("Built with Muse Spark 1.3, SAM 3.1 (Meta Model API)")).toBeVisible();
+  await expect(page.getByTestId("footer-built")).toHaveText("Built with Muse Spark 1.3, SAM 3.1 (Meta Model API) · plant images: ALED, CC BY 4.0");
+  await expect(page.getByTestId("eval-recorded")).toContainText(/(RECORDED|SCRIPTED) RUN/);
+  await expect(page.getByTestId("edge-eval-recorded")).toContainText(/(RECORDED|SCRIPTED) RUN/);
+  await expect(page.locator("body")).not.toContainText(/glimmer|dinov3/i);
   expect(errors).toEqual([]);
 });
 

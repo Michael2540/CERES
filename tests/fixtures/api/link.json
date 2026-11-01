@@ -11,5 +11,7 @@
   "earth_model": "muse-spark-1.3",
   "edge_recordings": [
     "alert_B_WILT_RISK_20160106T100000Z"
-  ]
+  ],
+  "demo_mode": false,
+  "agent_recordings": []
 }

@@ -109,6 +109,7 @@ def view(conn: sqlite3.Connection, r: sqlite3.Row, link: delay_sim.LinkState, no
     ea = conn.execute("SELECT * FROM assessments WHERE id = ?", (r["edge_assessment_id"],)).fetchone() \
         if r["edge_assessment_id"] else None
     alert = conn.execute("SELECT tray_id FROM alerts WHERE id = ?", (payload["alert_id"],)).fetchone()
+    ra = conn.execute("SELECT recorded, model, provider FROM assessments WHERE id = ?", (r["earth_assessment_id"],)).fetchone()         if r["earth_assessment_id"] else None
     prov = provenance(ea)
     if prov is not None:
         prov["recorded_as_of"] = (payload.get("edge") or {}).get("recorded_as_of")
@@ -125,6 +126,8 @@ def view(conn: sqlite3.Connection, r: sqlite3.Row, link: delay_sim.LinkState, no
         "grounding": json.loads(ea["warnings"]) if ea is not None and ea["warnings"] is not None else None,
         "audit_json": json.loads(r["audit_json"]) if r["audit_json"] else None,
         "earth_assessment_id": r["earth_assessment_id"],
+        # LIVE or RECORDED, and the model that answered, from the Earth-side assessments row (null before delivery)
+        "earth_provenance": {"recorded": bool(ra["recorded"]), "model": ra["model"], "provider": ra["provider"]} if ra else None,
         "deliverable": r["status"] in DRAINABLE and secs == 0.0,
         "deliver_in_s": None if secs is None else round(secs, 1),
         "error": r["error"],

@@ -78,11 +78,6 @@ export default function TrustPage() {
         </div>
         <p className="mt-2 text-xs text-slate-400">Every chart and card carries a badge that says which. Scale (cm² per pixel) is a nominal constant, not measured.</p>
       </Panel>
-
-      <footer className="border-t border-slate-800 pt-3 text-xs text-slate-400">
-        <p data-testid="footer-built">Built with Muse Spark · SAM 3.1</p>
-        <p>Images: Aberystwyth Leaf Evaluation Dataset (CC BY 4.0)</p>
-      </footer>
     </div>
   );
 }
@@ -169,6 +164,17 @@ function sec(v: number | null | undefined): string {
   return v === null || v === undefined ? "n/a" : `${(v / 1000).toFixed(1)} s`;
 }
 
+/** These eval numbers come from a real, finished run stored in the repo; the page replays the stored report. */
+function RunBadge({ runId, date, fake, testId }: { runId: string; date: string; fake?: boolean; testId: string }) {
+  return (
+    <p className="flex flex-wrap items-center gap-2 text-xs text-slate-300" data-testid={testId}>
+      <span className="rounded bg-violet-900 px-1.5 py-0.5 text-[11px] font-bold text-violet-200">{fake ? "SCRIPTED RUN" : "RECORDED RUN"}</span>
+      <span className="font-mono">{runId}</span>
+      <span>{date.slice(0, 10)} (live model calls, stored report)</span>
+    </p>
+  );
+}
+
 function Chip({ ok, children }: { ok: boolean | null; children: React.ReactNode }) {
   const cls = ok === null ? "border-slate-600 text-slate-400" : ok ? "border-emerald-600 text-emerald-300" : "border-red-500 text-red-300";
   return <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase ${cls}`}>{children}</span>;
@@ -209,6 +215,7 @@ function Scoreboard({ d }: { d: EvalLatest }) {
   const det = d.deterministic;
   return (
     <div className="space-y-4" data-testid="scoreboard">
+      <RunBadge runId={d.run_id} date={d.generated_at} fake={d.fake} testId="eval-recorded" />
       {d.fake && (
         <p className="rounded border border-amber-600/50 bg-amber-950/30 p-2 text-xs text-amber-200" data-testid="fake-run">
           Scripted run: the answers are canned, so these numbers only show the harness works. They are not model results.
@@ -312,6 +319,7 @@ function EdgeEval({ d }: { d: EdgeEvalLatest }) {
   ];
   return (
     <div className="space-y-4" data-testid="edge-eval">
+      <RunBadge runId={d.run_id} date={d.generated_at} fake={d.fake} testId="edge-eval-recorded" />
       {d.fake && (
         <p className="rounded border border-amber-600/50 bg-amber-950/30 p-2 text-xs text-amber-200" data-testid="edge-fake-run">
           Scripted run: the answers are canned, so these numbers only show the harness works. They are not model results.

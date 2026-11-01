@@ -15,7 +15,7 @@ All third-party libraries, data, and assets used are listed below with their lic
 
 | Name | License | Usage |
 |---|---|---|
-| Aberystwyth Leaf Evaluation Dataset (ALED), Aberystwyth University / NPPC, Zenodo 10.5281/zenodo.168158 | CC BY 4.0 | Plant time-lapse frames and ground-truth masks (sampled; only a small subset is committed in `data/demo/`) |
+| Aberystwyth Leaf Evaluation Dataset (ALED), Aberystwyth University / NPPC, Zenodo 10.5281/zenodo.168158 | CC BY 4.0 | Plant time-lapse frames and ground-truth masks (sampled). `data/demo/frames/` commits all 844 mission frames downscaled to 640 px (attribution in NOTICE); full-resolution frames stay out of the repository |
 | meta-sam-parser | SAM License | Parses `sam-3.1` segmentation output (installed dependency, not vendored) |
 | certifi | MPL-2.0 | CA bundle for TLS to the Meta Model API |
 | FastAPI, Pydantic, PyYAML, jsonschema, remotezip | MIT | Backend API, config, schema validation, dataset range reads |
@@ -24,6 +24,11 @@ All third-party libraries, data, and assets used are listed below with their lic
 | Pillow | MIT-CMU (HPND) | Image I/O |
 | Next.js, React, Tailwind CSS, Recharts | MIT | Dashboard |
 | Playwright | Apache 2.0 | UI smoke tests |
+| Starlette (via FastAPI) | BSD-3-Clause | ASGI toolkit under FastAPI |
+| pytest, ruff | MIT | Backend tests and lint (dev only) |
+| pytest-asyncio | Apache 2.0 | Async tests (dev only) |
+| TypeScript | Apache 2.0 | Dashboard language (dev only) |
+| ESLint, @eslint/eslintrc, eslint-config-next, @tailwindcss/postcss, @types/* | MIT | Dashboard lint and build tooling (dev only) |
 
 ## Build Log
 
@@ -40,6 +45,7 @@ All third-party libraries, data, and assets used are listed below with their lic
 | 2026-10-28 | **`sam-3.1`** segmented all 844 frames ($1.95, 0 errors). M3b: pipeline, mission replay clock, read API, alert episodes. |
 | 2026-10-28 | M4: **`muse-spark-1.3`** Flight Agronomist (tools, citation validator, SSE). Live: B wilt alert → valid assessment, underwatering 0.80, $0.094. |
 | 2026-10-31 | M8 Mars mode: simulated link + queue, edge triage on **`muse-spark-1.3-contributor`** (recorded, labelled with the real model), code-computed Earth audit, numeric-grounding and crew-claim hallucination checks (attacked by a Sonnet reviewer; all findings fixed). Edge eval 9/9; agronomist 11/11. Video summary and voice notes cut. |
+| 2026-10-31 | M9 demo hardening: `make demo` runs the whole product offline from `data/demo/` (seed DB, 640 px frames, recorded edge and Flight Agronomist runs replayed through the same validators, labelled RECORDED). The 4 Earth-side demo runs were recorded live with **`muse-spark-1.3`** via `scripts/record_demo.py` ($0.41). Independent final audit: fresh copy, no key, zero network attempts. |
 | 2026-10-31 | Agent prompt: general sensor-fault signatures (a disagreeing sensor in another place is not a fault). Eval 11/11 in three runs (low x2, high). Eval spend total $9.13. |
 | 2026-10-31 | Perception fixes (SAM colour trim, GT Dice 0.94) and M7 eval harness: 11 scenarios on **`muse-spark-1.3`** at low and high effort, 10/11 pass; a first run at 6/9 was traced to simulation flaws, fixed and kept on record. Eval spend $5.97. |
 | 2026-10-30 | M6: **`sam-3.1`** validated against 55 ALED hand-annotated frames (39 new calls, $0.10) with a colour-threshold baseline; `/eval/area-validation` and the /trust card. |

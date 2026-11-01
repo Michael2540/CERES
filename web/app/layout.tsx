@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import AgentPanel from "@/components/AgentPanel";
+import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import { MissionProvider } from "@/lib/mission";
 
@@ -20,6 +21,7 @@ export default function RootLayout({
         <MissionProvider>
           <Header />
           <main className="px-3 py-4 sm:px-4">{children}</main>
+          <Footer />
           <AgentPanel />
         </MissionProvider>
       </body>

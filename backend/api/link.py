@@ -18,6 +18,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from backend.agent import replay as agent_replay
 from backend.agent.llm_client import resolve_role
 from backend.api import assessments as assess_api
 from backend.api import deps
@@ -48,6 +49,9 @@ def link_view(conn: sqlite3.Connection, as_of: datetime) -> dict:
         "edge_location": "recorded" if settings.edge_mode == "recorded" else "remote_api",
         "earth_model": resolve_role("agronomist").model,
         "edge_recordings": edge.recorded_alert_ids() if settings.edge_mode == "recorded" else [],
+        # DEMO_MODE: every model result is replayed; these alerts have a recorded Earth-side run (others answer 409)
+        "demo_mode": settings.demo_mode,
+        "agent_recordings": agent_replay.recorded_alert_ids() if settings.demo_mode else [],
     }
 
 
@@ -135,7 +139,7 @@ def post_drain(
     due = queue.deliverable_items(conn, link, time.time(), as_of)
     if body.max_items:
         due = due[: body.max_items]
-    lo, hi = service.EST_DRAIN_USD
+    lo, hi = (0.0, 0.0) if load_settings().demo_mode else service.EST_DRAIN_USD  # DEMO_MODE replays: free
     out = {
         "started": False, "confirm_required": not body.confirm, "link_state": link.state,
         "item_ids": [r["id"] for r in due], "est_cost_usd": {"low": round(len(due) * lo, 2), "high": round(len(due) * hi, 2)},
@@ -151,7 +155,8 @@ def post_drain(
         if any(t.is_alive() for t in DRAIN_THREADS):
             raise HTTPException(409, "a drain is already running")
         try:
-            check_budget(conn, len(due) * hi)
+            if hi:
+                check_budget(conn, len(due) * hi)
         except BudgetExceeded as e:
             raise HTTPException(402, str(e)) from None
         t = threading.Thread(target=_drain_worker, args=(body.max_items, as_of), daemon=True, name="link-drain")

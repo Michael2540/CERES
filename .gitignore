@@ -25,6 +25,7 @@ data/*.db-journal
 backend/eval/out/*.json
 !backend/eval/out/area_validation.json
 !backend/eval/out/latest.json
+!backend/eval/out/latest_edge.json
 !backend/eval/out/.gitkeep
 web/.next
 web/node_modules

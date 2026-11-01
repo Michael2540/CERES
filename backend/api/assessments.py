@@ -19,7 +19,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
-from backend.agent import agronomist
+from backend.agent import agronomist, replay
 from backend.agent.llm_client import LLMClient
 from backend.api import deps
 from backend.timeutil import iso_z
@@ -71,6 +71,8 @@ def start_assessment(
             aid = agronomist.begin(conn, alert_id, as_of)
         except agronomist.AlertNotFound as e:
             raise HTTPException(404, str(e)) from None
+        except replay.NoAgentRecording as e:  # DEMO_MODE: never a live call, never an invented result
+            raise HTTPException(409, str(e)) from None
     t = threading.Thread(target=_worker, args=(aid, as_of, "agronomist"), daemon=True, name=f"assess-{aid}")
     THREADS[aid] = t
     t.start()

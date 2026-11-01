@@ -11,7 +11,7 @@ import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from backend.api import deps
-from backend.config import ROOT
+from backend.config import frame_file
 from backend.perception.metrics import rle_decode
 from backend.timeutil import iso_z
 
@@ -54,7 +54,7 @@ def list_frames(
 
 def _frame(conn: sqlite3.Connection, tray_id: str, fid: str, as_of: datetime) -> sqlite3.Row:
     row = conn.execute("SELECT * FROM frames WHERE id = ? AND tray_id = ?", (fid, tray_id)).fetchone()
-    if row is None or row["ts"] > iso_z(as_of) or not (ROOT / row["path"]).is_file():
+    if row is None or row["ts"] > iso_z(as_of) or not frame_file(row["path"]).is_file():
         raise HTTPException(404, "frame not found")
     return row
 
@@ -66,7 +66,7 @@ def frame_image(tray_id: str, fid: str, as_of: datetime = Depends(deps.get_as_of
         row = _frame(conn, tray_id, fid, as_of)
     finally:
         conn.close()
-    return Response((ROOT / row["path"]).read_bytes(), media_type="image/jpeg")
+    return Response(frame_file(row["path"]).read_bytes(), media_type="image/jpeg")
 
 
 def render_overlay(
@@ -90,6 +90,9 @@ def frame_overlay(tray_id: str, fid: str, as_of: datetime = Depends(deps.get_as_
         conn.close()
     if m is None:
         raise HTTPException(404, "frame has no canopy mask yet")
-    img = cv2.imread(str(ROOT / row["path"]))
-    _ok, png = cv2.imencode(".png", render_overlay(img, rle_decode(json.loads(m["rle"]))))
+    img = cv2.imread(str(frame_file(row["path"])))
+    mask = rle_decode(json.loads(m["rle"]))
+    if mask.shape != img.shape[:2]:  # the demo bundle ships downscaled frames and masks of the same (smaller) size
+        mask = cv2.resize(mask.astype(np.uint8), (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST).astype(bool)
+    _ok, png = cv2.imencode(".png", render_overlay(img, mask))
     return Response(png.tobytes(), media_type="image/png")

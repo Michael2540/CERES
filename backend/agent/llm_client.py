@@ -121,6 +121,9 @@ class LLMClient:
         openai_client: Any | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
+        if openai_client is None and load_settings().demo_mode:
+            # DEMO_MODE never reaches the network: model results come from recordings (backend/agent/replay.py)
+            raise RuntimeError("DEMO_MODE=1: live model calls are disabled; results are replayed from recordings")
         self.conn = conn
         self._override = openai_client
         self._clients: dict[str, Any] = {}

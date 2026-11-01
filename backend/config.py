@@ -29,6 +29,8 @@ class Settings:
     budget_usd: float
     demo_mode: bool
     has_meta_api_key: bool  # presence only; the value is never stored or logged
+    images_root: str = ""  # IMAGES_ROOT: directory holding the frame files by name (the demo bundle); "" = repo root
+    replay_pace_s: float = 0.6  # CERES_REPLAY_PACE_S: pause between replayed events so the SSE stream is readable
 
 
 def load_settings() -> Settings:
@@ -36,14 +38,29 @@ def load_settings() -> Settings:
     edge = os.getenv("EDGE_MODE") or "recorded"
     if edge not in EDGE_MODES:
         raise ValueError(f"EDGE_MODE must be one of {EDGE_MODES}, got {edge!r}")
+    demo = _bool(os.getenv("DEMO_MODE"))
+    if demo:
+        edge = "recorded"  # DEMO_MODE never makes a live call, whatever EDGE_MODE says
     return Settings(
         db_path=os.getenv("DB_PATH") or "data/ceres.db",
         sam_backend=os.getenv("SAM_BACKEND") or "api",
         edge_mode=edge,
         budget_usd=float(os.getenv("CERES_BUDGET_USD") or 100),
-        demo_mode=_bool(os.getenv("DEMO_MODE")),
+        demo_mode=demo,
         has_meta_api_key=bool(os.getenv("META_API_KEY")),
+        images_root=os.getenv("IMAGES_ROOT") or "",
+        replay_pace_s=float(os.getenv("CERES_REPLAY_PACE_S") or 0.6),
     )
+
+
+def frame_file(path: str | Path) -> Path:
+    """Where a frame's image lives. `frames.path` is relative to the repo root; with IMAGES_ROOT set (the offline demo)
+    the file is looked up by name in that directory instead, so the demo serves data/demo/frames without data/raw."""
+    root = load_settings().images_root
+    if root:
+        base = Path(root)
+        return (base if base.is_absolute() else ROOT / base) / Path(str(path)).name
+    return ROOT / path
 
 
 class Lamp(BaseModel):

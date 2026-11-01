@@ -283,6 +283,8 @@ class ApiBackend(_Convenience):
 def get_backend(name: str | None, conn: sqlite3.Connection) -> SamBackend:
     name = name or load_settings().sam_backend
     if name == "api":
+        if load_settings().demo_mode:
+            raise RuntimeError("DEMO_MODE=1: live SAM calls are disabled; the demo DB holds the masks")
         return ApiBackend(conn)
     if name == "hsv":
         return HsvBackend()

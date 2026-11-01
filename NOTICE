@@ -9,12 +9,18 @@ Aberystwyth Leaf Evaluation Dataset (ALED)
   Licence: Creative Commons Attribution 4.0 International (CC BY 4.0), https://creativecommons.org/licenses/by/4.0/
 
   Changes made by CERES:
-  - Frames are subsampled (about one per 2 h of imaging), downscaled to 1024 px (512 px for the committed demo
-    subset in data/demo/frames/), and re-encoded as JPEG.
+  - Frames are subsampled (about one per 2 h of imaging), downscaled to 1024 px, and re-encoded as JPEG.
+  - The demo bundle (data/demo/frames/, 844 files, and the canopy masks in data/demo/seed.db.gz) contains these
+    frames downscaled again to 640 px wide and re-encoded as JPEG (quality 65), so the offline demo runs without the
+    original dataset. For trays B and C after their fault start the bundled frames are the altered versions below.
+    The 61.6 GB original archive and the full-resolution frames are not redistributed.
   - From each tray's configured fault start, frames of tray B are altered by a deterministic image transform
     (plants shrunk and colour-dulled to simulate wilting), and frames of tray C are time-warped and dimmed (to
     simulate low light). These altered frames are generated locally and labelled "SIMULATED FAULT" everywhere in
     the app. ALED itself contains no stress treatments.
+
+Attribution: the images were created by Bell and Dee (Aberystwyth University / National Plant Phenomics Centre) and
+are shared under CC BY 4.0; CERES is not endorsed by the authors. Changes are indicated above.
 
 Third-party software and models
 -------------------------------
