@@ -108,7 +108,7 @@ Faults on trays B and C (image transform, low-light time-warp), every sensor rea
 
 ## Demo
 
-- **Demo video (3 min):** _link coming soon_ <!-- placeholder: add the GIF/video link here -->
+- **Demo video (3 min):** [https://youtu.be/ZVHYZn5X9S4](https://youtu.be/ZVHYZn5X9S4)
 - **Live product:** `make demo` (offline replay) or `make dev` (live, with a key)
 
 ## Quick start
