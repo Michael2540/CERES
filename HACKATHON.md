@@ -58,7 +58,7 @@ All third-party libraries, data, and assets used are listed below with their lic
 - [x] Problem statement selected in README (Push the Frontier)
 - [x] Meta models used and documented in README
 - [x] Hackathon-built features listed in README (update as M6–M9 land)
-- [ ] 3-minute demo video (hackathon-built features only), publicly accessible
+- [x] 3-minute demo video (hackathon-built features only), publicly accessible: https://youtu.be/ZVHYZn5X9S4
 - [ ] All team members (max 4) listed on the submission page
 - [ ] Meta Model API credits claimed by each member (by Nov 4, 9 PM ET)
 - [ ] Submitted on the CV platform by Nov 4, 9:00 PM ET
